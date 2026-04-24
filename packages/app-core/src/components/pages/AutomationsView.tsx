@@ -116,7 +116,7 @@ import {
   type VisualizeWorkflowEventDetail,
 } from "./workflow-graph-events";
 
-type AutomationFilter = "all" | "coordinator" | "workflows" | "scheduled";
+type AutomationFilter = "all" | "workflows" | "tasks";
 type AutomationSubpage = "list" | "node-catalog";
 type SelectionKind = "trigger" | "task" | "workflow" | null;
 type AutomationItem = CatalogAutomationItem;
@@ -710,12 +710,10 @@ function useAutomationsViewController() {
   const allItems = automationItems;
   const filteredItems = useMemo(() => {
     switch (filter) {
-      case "coordinator":
-        return allItems.filter((item) => item.type === "coordinator_text");
+      case "tasks":
+        return allItems.filter((item) => item.type !== "n8n_workflow");
       case "workflows":
         return allItems.filter((item) => item.type === "n8n_workflow");
-      case "scheduled":
-        return allItems.filter((item) => item.schedules.length > 0);
       default:
         return allItems;
     }
