@@ -2250,18 +2250,118 @@ function OverviewListItem({
   );
 }
 
+function HeroEmptyState({
+  ideas,
+  onSubmit,
+  drafts,
+  onSelectDraft,
+  t,
+}: {
+  ideas: AutomationExample[];
+  onSubmit: (text: string) => void;
+  drafts: AutomationItem[];
+  onSelectDraft: (item: AutomationItem) => void;
+  t: AutomationsViewController["t"];
+}) {
+  const [value, setValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const submit = useCallback(() => {
+    const text = value.trim();
+    if (text.length === 0) return;
+    setValue("");
+    onSubmit(text);
+  }, [onSubmit, value]);
+
+  const handleChipSelect = useCallback((idea: AutomationExample) => {
+    setValue(idea.prompt);
+    textareaRef.current?.focus();
+  }, []);
+
+  const canSubmit = value.trim().length > 0;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 py-10">
+      <div className="w-full max-w-[560px] space-y-3">
+        <div className="relative">
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Describe a task or workflow…"
+            rows={2}
+            variant="form"
+            className="resize-none pr-12"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute bottom-2 right-2 h-7 w-7 p-0"
+            onClick={submit}
+            disabled={!canSubmit}
+            aria-label="Submit"
+          >
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ideas.map((idea) => (
+            <button
+              key={idea.label}
+              type="button"
+              onClick={() => handleChipSelect(idea)}
+              className="rounded-full border border-border/50 bg-bg-accent px-2.5 py-1 text-xs text-txt transition-colors hover:border-accent/40 hover:bg-accent/5"
+            >
+              {idea.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {drafts.length > 0 && (
+        <div className="w-full max-w-[560px]">
+          <DetailSection title="Drafts in progress">
+            <div className="divide-y divide-border/20">
+              {drafts.map((item) => (
+                <OverviewListItem
+                  key={item.id}
+                  onClick={() => onSelectDraft(item)}
+                  title={getOverviewDisplayTitle(item)}
+                  badge="Draft"
+                  meta={formatRelativePast(item.updatedAt, t)}
+                  detail={
+                    item.description.trim() ||
+                    "Open it and keep shaping it in the sidebar agent."
+                  }
+                  tone="warning"
+                />
+              ))}
+            </div>
+          </DetailSection>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AutomationsDashboard({
   items,
   onSelectItem,
   onCreateTask,
   onCreateWorkflow,
-  onUseIdea,
+  onSubmitPrompt,
 }: {
   items: AutomationItem[];
   onSelectItem: (item: AutomationItem) => void;
   onCreateTask: () => void;
   onCreateWorkflow: () => void;
-  onUseIdea: (idea: AutomationExample) => void;
+  onSubmitPrompt: (text: string) => void;
 }) {
   const { t, uiLanguage } = useAutomationsViewContext();
   const now = Date.now();
@@ -2357,14 +2457,6 @@ function AutomationsDashboard({
         .slice(0, 5),
     [scheduledEntries],
   );
-  const taskIdeas = useMemo(
-    () => AUTOMATION_DRAFT_EXAMPLES.filter((idea) => idea.kind === "task"),
-    [],
-  );
-  const workflowIdeas = useMemo(
-    () => AUTOMATION_DRAFT_EXAMPLES.filter((idea) => idea.kind === "workflow"),
-    [],
-  );
   const nextUpcoming = upcoming[0] ?? null;
   const attentionEntries = useMemo(() => {
     const next: Array<{
@@ -2394,74 +2486,13 @@ function AutomationsDashboard({
 
   if (taskCount === 0 && workflowCount === 0) {
     return (
-      <div className="space-y-4 px-1 pt-4">
-        <section className="overflow-hidden rounded-xl border border-border/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_38%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.12),transparent_32%),rgba(255,255,255,0.02)]">
-          <div className="space-y-3 px-4 py-4 sm:px-5">
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/25 bg-bg/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
-              <LayoutDashboard className="h-3 w-3" aria-hidden />
-              Overview
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-txt">
-                Build your first automation
-              </h2>
-              <p className="text-xs-tight text-muted/80">
-                Workflows handle multi-step pipelines; tasks are simple prompts
-                that run on a schedule or from an event.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="default" size="sm" onClick={onCreateTask}>
-                New task
-              </Button>
-              <Button variant="outline" size="sm" onClick={onCreateWorkflow}>
-                New workflow
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <div className="grid gap-3 xl:grid-cols-2">
-          <DetailSection title="Task ideas">
-            <div className="p-2">
-              <OverviewIdeaGrid
-                ideas={taskIdeas}
-                onSelect={(idea) => onUseIdea(idea)}
-              />
-            </div>
-          </DetailSection>
-
-          <DetailSection title="Workflow ideas">
-            <div className="p-2">
-              <OverviewIdeaGrid
-                ideas={workflowIdeas}
-                onSelect={(idea) => onUseIdea(idea)}
-              />
-            </div>
-          </DetailSection>
-        </div>
-
-        {draftItems.length > 0 && (
-          <DetailSection title="Drafts in progress">
-            <div className="divide-y divide-border/20">
-              {draftItems.map((item) => (
-                <OverviewListItem
-                  key={item.id}
-                  onClick={() => onSelectItem(item)}
-                  title={getOverviewDisplayTitle(item)}
-                  badge="Draft"
-                  meta={formatRelativePast(item.updatedAt, t)}
-                  detail={
-                    item.description.trim() ||
-                    "Open it and keep shaping it in the sidebar agent."
-                  }
-                  tone="warning"
-                />
-              ))}
-            </div>
-          </DetailSection>
-        )}
-      </div>
+      <HeroEmptyState
+        ideas={AUTOMATION_DRAFT_EXAMPLES}
+        onSubmit={onSubmitPrompt}
+        drafts={draftItems}
+        onSelectDraft={onSelectItem}
+        t={t}
+      />
     );
   }
 
@@ -4527,19 +4558,6 @@ function AutomationsLayout() {
     openCreateTask();
   }, [openCreateTask, showAutomationsList]);
 
-  const openSeededTask = useCallback(
-    (idea: AutomationExample) => {
-      showAutomationsList();
-      openCreateTrigger();
-      setForm({
-        ...emptyForm,
-        displayName: idea.label,
-        instructions: idea.prompt,
-      });
-    },
-    [openCreateTrigger, setForm, showAutomationsList],
-  );
-
   const handleRefreshWorkflows = useCallback(async () => {
     setPageNotice(null);
     const data = await refreshAutomationsWithDraftBinding(
@@ -5067,16 +5085,9 @@ function AutomationsLayout() {
             onSelectItem={selectItem}
             onCreateTask={handleZeroStateNewTask}
             onCreateWorkflow={() => void createWorkflowDraft()}
-            onUseIdea={(idea) => {
-              if (idea.kind === "workflow") {
-                void createWorkflowDraft({
-                  title: idea.label,
-                  initialPrompt: idea.prompt,
-                });
-                return;
-              }
-              openSeededTask(idea);
-            }}
+            onSubmitPrompt={(text) =>
+              void createWorkflowDraft({ initialPrompt: text })
+            }
           />
         ) : resolvedSelectedItem?.type === "automation_draft" ? (
           <AutomationDraftPane
