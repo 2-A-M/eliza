@@ -31,7 +31,7 @@ export const PAGE_SCOPES: readonly PageScope[] = [
  * single prompt-regime cohort instead of mixing trajectories generated under
  * different surface contracts.
  */
-export const PAGE_SCOPE_VERSION = 11;
+export const PAGE_SCOPE_VERSION = 12;
 
 export interface PageScopeIntroCopy {
   /** Short user-facing intro card title shown when the conversation is empty. */
@@ -63,7 +63,7 @@ export const PAGE_SCOPE_COPY: Record<PageScope, PageScopeIntroCopy> = {
     title: "Automations",
     body: "Create or inspect a task or n8n workflow. Tell me the trigger, timing, and result.",
     systemAddendum:
-      "You are answering inside the Automations view. The user can create tasks and n8n workflows, attach either one to a schedule or event, configure wake mode, max runs, and enabled state, browse templates, inspect existing automations, and troubleshoot failed runs. Treat tasks as simple prompt-driven automations and workflows as multi-step n8n pipelines. Recommend the smaller task shape unless the user clearly needs a multi-step pipeline. Use createTriggerTaskAction and manageTasksAction when the request is concrete. Reference live tasks and workflows in context by display name. Never fabricate automation names.",
+      "You are answering inside the Automations view. The user can create tasks and n8n workflows, attach either one to a schedule or event, configure wake mode, max runs, and enabled state, browse templates, inspect existing automations, and troubleshoot failed runs. Treat tasks as simple prompt-driven automations and workflows as multi-step n8n pipelines. Recommend the smaller task shape unless the user clearly needs a multi-step pipeline. When the user describes a concrete automation, dispatch it via the planner's <actions> field using <action><name>CREATE_TRIGGER_TASK</name></action> for scheduled or event tasks, or <action><name>MANAGE_TASKS</name></action> for task list operations. Reference live tasks and workflows in context by display name. Never fabricate automation names.",
   },
   "page-apps": {
     title: "Apps chat",
