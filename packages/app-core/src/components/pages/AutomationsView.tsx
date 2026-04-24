@@ -1812,7 +1812,6 @@ function TaskAutomationDetailPane({
     .map((schedule) => schedule.nextRunAtMs ?? 0)
     .filter((value) => value > 0)
     .sort((left, right) => left - right)[0];
-  const taskTypeLabel = automation.system ? "Agent owned" : "Task";
 
   return (
     <div className="space-y-4">
@@ -1886,46 +1885,6 @@ function TaskAutomationDetailPane({
           ) : null
         }
       />
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewMetricCard
-          label="Task type"
-          value={taskTypeLabel}
-          detail={
-            automation.schedules.length > 0
-              ? formatScheduleCount(automation.schedules.length)
-              : "Run it manually"
-          }
-        />
-        <OverviewMetricCard
-          label="Status"
-          value={statusLabel}
-          detail={task.isCompleted ? "Already completed" : "Still open"}
-          tone={task.isCompleted ? "default" : "ok"}
-        />
-        <OverviewMetricCard
-          label="Starts"
-          value={
-            nextScheduledRun
-              ? formatRelativeFuture(nextScheduledRun, t)
-              : "Manual"
-          }
-          detail={
-            nextScheduledRun
-              ? formatDateTime(nextScheduledRun, {
-                  fallback: "—",
-                  locale: uiLanguage,
-                })
-              : "Run it yourself or attach a schedule"
-          }
-          tone={nextScheduledRun ? "ok" : "default"}
-        />
-        <OverviewMetricCard
-          label="Updated"
-          value={formatRelativePast(automation.updatedAt, t)}
-          detail={formatDateTime(automation.updatedAt, { fallback: "—" })}
-        />
-      </div>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.12fr)_minmax(320px,0.88fr)]">
         <div className="space-y-4">
           <DetailSection title="Prompt">
@@ -2032,14 +1991,6 @@ const AUTOMATION_DRAFT_EXAMPLES: AutomationExample[] = [
       "Every weekday at 9am, summarize my Gmail inbox from the last 24 hours and post the summary to my #daily channel in Slack.",
   },
   {
-    icon: Clock3,
-    kind: "task",
-    label: "Hourly health check",
-    blurb: "A lightweight prompt that watches for anything stuck or failing.",
-    prompt:
-      "Every hour, review recent activity, check that nothing is stuck or errored, and notify me if anything needs attention.",
-  },
-  {
     icon: GitBranch,
     kind: "workflow",
     label: "GitHub issue triage",
@@ -2056,48 +2007,6 @@ const AUTOMATION_DRAFT_EXAMPLES: AutomationExample[] = [
       "When a new website lead arrives, enrich it, create the contact in my CRM, and post a summary to Slack for the team.",
   },
 ];
-
-function OverviewIdeaGrid({
-  ideas,
-  onSelect,
-}: {
-  ideas: AutomationExample[];
-  onSelect: (idea: AutomationExample) => void;
-}) {
-  return (
-    <div className="grid gap-1.5">
-      {ideas.map((idea) => {
-        const Icon = idea.icon;
-        return (
-          <button
-            key={idea.label}
-            type="button"
-            onClick={() => onSelect(idea)}
-            className="group flex items-start gap-2 rounded-[var(--radius-sm)] border border-border/25 bg-bg/30 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-accent/5"
-          >
-            <Icon
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent/80"
-              aria-hidden
-            />
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <div className="flex items-center gap-2">
-                <div className="truncate text-xs-tight font-semibold text-txt">
-                  {idea.label}
-                </div>
-                <span className="rounded bg-bg/50 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted/70">
-                  {idea.kind}
-                </span>
-              </div>
-              <div className="text-[11px] leading-snug text-muted/70">
-                {idea.blurb}
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function formatRelativeFuture(
   targetMs: number,
@@ -2612,71 +2521,6 @@ function DetailFactList({
   );
 }
 
-function getWorkflowFlowNodes(workflow: N8nWorkflow | null): Array<{
-  id: string;
-  label: string;
-  type: string;
-}> {
-  const nodes = workflow?.nodes ?? [];
-  return [...nodes]
-    .sort((left, right) => {
-      const leftX = left.position?.[0] ?? 0;
-      const rightX = right.position?.[0] ?? 0;
-      if (leftX !== rightX) return leftX - rightX;
-      const leftY = left.position?.[1] ?? 0;
-      const rightY = right.position?.[1] ?? 0;
-      if (leftY !== rightY) return leftY - rightY;
-      return left.name.localeCompare(right.name);
-    })
-    .map((node) => ({
-      id: node.id ?? node.name,
-      label: node.name,
-      type: (node.type ?? "node").split(".").pop() ?? "node",
-    }));
-}
-
-function WorkflowDataFlowStrip({
-  workflow,
-}: {
-  workflow: N8nWorkflow | null;
-}) {
-  const flowNodes = getWorkflowFlowNodes(workflow);
-  if (flowNodes.length === 0) {
-    return (
-      <div className="px-4 py-3 text-xs-tight text-muted/70">
-        Generate the workflow to see its data path.
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-3">
-      <span className="rounded-full border border-border/25 bg-bg/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-        Input
-      </span>
-      {flowNodes.map((node, index) => (
-        <div key={node.id} className="flex items-center gap-2">
-          <ArrowRight className="h-3 w-3 text-muted/50" aria-hidden />
-          <span className="max-w-[12rem] truncate rounded-full border border-border/25 bg-bg/45 px-2.5 py-1 text-xs text-txt">
-            {node.label}
-          </span>
-          <span className="hidden rounded bg-bg/40 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-muted/60 sm:inline">
-            {node.type}
-          </span>
-          {index === flowNodes.length - 1 ? (
-            <>
-              <ArrowRight className="h-3 w-3 text-muted/50" aria-hidden />
-              <span className="rounded-full border border-border/25 bg-bg/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
-                Output
-              </span>
-            </>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function TriggerAutomationDetailPane({
   automation,
   onPromoteToWorkflow,
@@ -2715,20 +2559,6 @@ function TriggerAutomationDetailPane({
     return null;
   }
 
-  const { failureCount, successCount } = selectedRuns.reduce(
-    (counts, run) => {
-      const tone = toneForLastStatus(run.status);
-      if (tone === "success") counts.successCount += 1;
-      else if (tone === "danger") counts.failureCount += 1;
-      return counts;
-    },
-    { failureCount: 0, successCount: 0 },
-  );
-  const nextRunLabel = trigger.nextRunAtMs
-    ? trigger.triggerType === "event"
-      ? `On ${humanizeEventKind(trigger.eventKind ?? "event")}`
-      : formatRelativeFuture(trigger.nextRunAtMs, t)
-    : "Event or manual";
   const whatRuns =
     trigger.kind === "workflow"
       ? trigger.workflowName || "Selected workflow"
@@ -2795,53 +2625,6 @@ function TriggerAutomationDetailPane({
           </>
         }
       />
-
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        <OverviewMetricCard
-          label="Runs"
-          value={<span className="tabular-nums">{selectedRuns.length}</span>}
-          detail={`${successCount} successful · ${failureCount} failed`}
-          tone={
-            failureCount > 0 ? "danger" : successCount > 0 ? "ok" : "default"
-          }
-        />
-        <OverviewMetricCard
-          label="Starts"
-          value={getTriggerStartModeLabel(trigger)}
-          detail={scheduleLabel(trigger, t, uiLanguage)}
-        />
-        <OverviewMetricCard
-          label="When it fires"
-          value={getTriggerWakeModeLabel(trigger)}
-          detail={trigger.enabled ? "Enabled" : "Paused"}
-          tone={trigger.enabled ? "ok" : "default"}
-        />
-        <OverviewMetricCard
-          label="Next run"
-          value={nextRunLabel}
-          detail={
-            trigger.triggerType === "event"
-              ? "Waiting for event input"
-              : formatDateTime(trigger.nextRunAtMs, {
-                  fallback: "No time-based run queued",
-                  locale: uiLanguage,
-                })
-          }
-          tone={
-            trigger.nextRunAtMs || trigger.triggerType === "event"
-              ? "ok"
-              : "default"
-          }
-        />
-        <OverviewMetricCard
-          label="Last run"
-          value={formatRelativePast(trigger.lastRunAtIso, t)}
-          detail={formatDateTime(trigger.lastRunAtIso, {
-            fallback: "Not run yet",
-            locale: uiLanguage,
-          })}
-        />
-      </div>
 
       <DetailSection
         title={trigger.kind === "workflow" ? "Runs this workflow" : "Prompt"}
@@ -2999,22 +2782,11 @@ function WorkflowAutomationDetailPane({
     .map((schedule) => schedule.nextRunAtMs ?? 0)
     .filter((value) => value > 0)
     .sort((left, right) => left - right)[0];
-  const workflowIdeas = AUTOMATION_DRAFT_EXAMPLES.filter(
-    (idea) => idea.kind === "workflow",
-  );
-  const showWorkflowStarterIdeas = automation.isDraft || nodeCount === 0;
   const showWorkflowPromptBox = automation.isDraft || nodeCount === 0;
   const handleDescribeWorkflow = useCallback(() => {
     chatChrome?.openChat();
     prefillPageChat(DESCRIBE_WORKFLOW_PROMPT, { select: true });
   }, [chatChrome]);
-  const handleUseWorkflowIdea = useCallback(
-    (idea: AutomationExample) => {
-      chatChrome?.openChat();
-      prefillPageChat(idea.prompt, { select: true });
-    },
-    [chatChrome],
-  );
   const submitWorkflowPrompt = useCallback(async () => {
     const prompt = workflowPrompt.trim();
     if (!prompt) {
@@ -3317,10 +3089,6 @@ function WorkflowAutomationDetailPane({
         </div>
       </DetailSection>
 
-      <DetailSection title="Data flow">
-        <WorkflowDataFlowStrip workflow={graphWorkflow} />
-      </DetailSection>
-
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.95fr)]">
         <DetailSection title="Starts when" className="h-full">
           {automation.schedules.length > 0 ? (
@@ -3346,39 +3114,28 @@ function WorkflowAutomationDetailPane({
           )}
         </DetailSection>
 
-        {showWorkflowStarterIdeas ? (
-          <DetailSection title="Starter ideas" className="h-full">
-            <div className="p-2">
-              <OverviewIdeaGrid
-                ideas={workflowIdeas}
-                onSelect={handleUseWorkflowIdea}
-              />
-            </div>
-          </DetailSection>
-        ) : (
-          <DetailSection title="Details" className="h-full">
-            <DetailFactList
-              items={[
-                {
-                  label: "Type",
-                  value: automation.isDraft ? "Draft" : "n8n workflow",
-                },
-                {
-                  label: "Nodes",
-                  value: String(nodeCount),
-                },
-                {
-                  label: "Schedules",
-                  value: String(automation.schedules.length),
-                },
-                {
-                  label: "Updated",
-                  value: formatRelativePast(automation.updatedAt, t),
-                },
-              ]}
-            />
-          </DetailSection>
-        )}
+        <DetailSection title="Details" className="h-full">
+          <DetailFactList
+            items={[
+              {
+                label: "Type",
+                value: automation.isDraft ? "Draft" : "n8n workflow",
+              },
+              {
+                label: "Nodes",
+                value: String(nodeCount),
+              },
+              {
+                label: "Schedules",
+                value: String(automation.schedules.length),
+              },
+              {
+                label: "Updated",
+                value: formatRelativePast(automation.updatedAt, t),
+              },
+            ]}
+          />
+        </DetailSection>
       </div>
     </div>
   );
