@@ -110,4 +110,63 @@ describe("lifeAction.validate — scope gating", () => {
     expect(result).toBe(false);
     expect(getRoom).not.toHaveBeenCalled();
   });
+
+  // Regression test for Session 14 — proves the helper reads scope from the
+  // full live room-metadata shape captured via in-process logging on
+  // `bun run dev:desktop:watch` for a `page-automations` conversation:
+  //   {
+  //     ownership: { ownerId: "..." },
+  //     webConversation: {
+  //       scope: "page-automations",
+  //       conversationId: "...",
+  //       sourceConversationId: "...",
+  //     },
+  //   }
+  // The simpler `{ webConversation: { scope } }` shape used elsewhere in this
+  // file is a strict subset; this case pins the fully-populated invariant so
+  // a future Room-metadata refactor that moves `scope` out of `webConversation`
+  // surfaces here instead of silently re-enabling LIFE on foreign page scopes.
+  it("rejects on page-automations with the fully-populated live room-metadata shape", async () => {
+    const getRoom = vi.fn(async (roomId: string) => ({
+      id: roomId,
+      metadata: {
+        ownership: {
+          ownerId: "0afe069b-83d3-0ea3-aa07-a47dd72ade03" as UUID,
+        },
+        webConversation: {
+          scope: "page-automations",
+          conversationId: "895d1dcc-9b47-45e2-a2d4-073ae22266d5",
+          sourceConversationId: "98665b9a-75f3-490f-89b7-34d24897ba6a",
+        },
+      },
+    }));
+    const runtime = { getRoom } as unknown as IAgentRuntime;
+    const message = buildMessage(reminderPrompt);
+    const result = await runValidate(runtime, message);
+    expect(result).toBe(false);
+    expect(getRoom).toHaveBeenCalledWith(ROOM_ID);
+  });
+
+  // The "ensureConnection reset" shape: room.metadata has only `ownership`
+  // (no `webConversation` block at all). `buildConversationRoomMetadata`
+  // writes the `webConversation` block on conversation create, but if a code
+  // path ever lands a room without it — e.g. a future `ensureConnection`
+  // refactor that clobbers metadata on message POST — the helper degrades to
+  // "no scope visible" and LIFE stays eligible. This test pins that
+  // degradation behavior so the next regressor has a clear failing assertion
+  // rather than a silent behavior flip.
+  it("returns no-scope (LIFE stays eligible) when room.metadata has only ownership", async () => {
+    const getRoom = vi.fn(async (roomId: string) => ({
+      id: roomId,
+      metadata: {
+        ownership: {
+          ownerId: "0afe069b-83d3-0ea3-aa07-a47dd72ade03" as UUID,
+        },
+      },
+    }));
+    const runtime = { getRoom } as unknown as IAgentRuntime;
+    const message = buildMessage(reminderPrompt);
+    const result = await runValidate(runtime, message);
+    expect(result).toBe(true);
+  });
 });

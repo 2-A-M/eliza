@@ -2469,21 +2469,10 @@ async function isForeignPageScope(
 ): Promise<boolean> {
   const room = await runtime.getRoom(message.roomId);
   const metadata = extractConversationMetadataFromRoom(room);
-  const derivedScope = metadata?.scope;
-  runtime.logger?.info?.(
-    {
-      src: "life.validate.scope",
-      roomId: message.roomId,
-      gotRoom: !!room,
-      roomMetadata: JSON.stringify(room?.metadata ?? null),
-      derivedScope,
-    },
-    "[GAP1-B] isForeignPageScope probe",
-  );
   if (!isPageScopedConversationMetadata(metadata)) {
     return false;
   }
-  return derivedScope !== "page-lifeops";
+  return metadata?.scope !== "page-lifeops";
 }
 
 export const lifeAction: Action & {
