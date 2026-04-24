@@ -40,6 +40,10 @@ import {
 import { gmailAction } from "./gmail.js";
 import { renderGroundedActionReply } from "@elizaos/agent/actions";
 import {
+  extractConversationMetadataFromRoom,
+  isPageScopedConversationMetadata,
+} from "@elizaos/agent/api/conversation-metadata";
+import {
   type ExtractedLifeMissingField,
   type ExtractedLifeOperation,
   extractLifeOperationWithLlm,
@@ -2452,6 +2456,25 @@ function formatWeeklyGoalReview(args: {
 
 // ── Main action ───────────────────────────────────────
 
+// LIFE belongs to the LifeOps surface (home chat / page-lifeops /
+// app-lifeops direct rooms). On foreign page-* scopes the action set is
+// scoped to that surface (page-automations → CREATE_TRIGGER_TASK,
+// page-browser → browser actions, etc.). When LIFE stays eligible on those
+// scopes its long description contaminates the ACTION_PLANNER candidate
+// list, driving the LLM to mimic the life-param-extractor JSON schema and
+// producing envelopes the planner's XML parse cannot read.
+async function isForeignPageScope(
+  runtime: IAgentRuntime,
+  message: Memory,
+): Promise<boolean> {
+  const room = await runtime.getRoom(message.roomId);
+  const metadata = extractConversationMetadataFromRoom(room);
+  if (!isPageScopedConversationMetadata(metadata)) {
+    return false;
+  }
+  return metadata?.scope !== "page-lifeops";
+}
+
 export const lifeAction: Action & {
   suppressPostActionContinuation?: boolean;
 } = {
@@ -2512,6 +2535,9 @@ export const lifeAction: Action & {
       // plugin-agent-orchestrator's CREATE_TASK take the route.
       looksLikeCodingTaskRequest(text)
     ) {
+      return false;
+    }
+    if (await isForeignPageScope(runtime, message)) {
       return false;
     }
     return hasLifeOpsAccess(runtime, message);
