@@ -2487,6 +2487,46 @@ export class AgentRuntime implements IAgentRuntime {
 					actionIndex++;
 					continue;
 				}
+				// Dispatch-time validate() re-check. The planner already filters
+				// by validate() during action selection, but a name picked by the
+				// keyword-overlap corrector at services/message.ts can bypass that
+				// gate and reach here on a foreign scope (the LIFE-on-page-automations
+				// regression Session 11/15 worked around in EXPLICIT_INTENT_ACTIONS).
+				// This is the systemic fix: never invoke a handler whose own
+				// validate() rejects the current (runtime, message, state).
+				if (typeof action.validate === "function") {
+					let validateAccepted = false;
+					try {
+						validateAccepted = await action.validate(this, message, state);
+					} catch (validateErr) {
+						this.logger.warn(
+							{
+								src: "agent",
+								agentId: this.agentId,
+								action: action.name,
+								error:
+									validateErr instanceof Error
+										? validateErr.message
+										: String(validateErr),
+							},
+							"Action validate() threw at dispatch — treating as rejected",
+						);
+					}
+					if (!validateAccepted) {
+						this.logger.debug(
+							{ src: "agent", agentId: this.agentId, action: action.name },
+							"Action validate() rejected at dispatch — skipping",
+						);
+						if (actionPlan?.steps?.[actionIndex]) {
+							actionPlan = this.updateActionStep(actionPlan, actionIndex, {
+								status: "failed",
+								error: "validate rejected at dispatch",
+							});
+						}
+						actionIndex++;
+						continue;
+					}
+				}
 				this.logger.debug(
 					{ src: "agent", agentId: this.agentId, action: action.name },
 					"Executing action",

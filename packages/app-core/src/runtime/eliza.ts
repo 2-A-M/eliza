@@ -509,6 +509,12 @@ async function repairRuntimeAfterBoot(
   // triggers can dispatch immediately on first emit.
   await ensureTriggerEventBridge(runtime);
 
+  // Register the Milady n8n credential provider so plugin-n8n-workflow
+  // can auto-attach Discord/Telegram credentials to generated workflows.
+  // Without this the plugin's runtime.getService("n8n_credential_provider")
+  // returns null on Milady local and every node deploys credential-less.
+  await ensureN8nCredentialProvider(runtime);
+
   return runtime;
 }
 
@@ -534,6 +540,11 @@ let _n8nDispatch: { execute: (workflowId: string) => Promise<unknown> } | null =
 // hot-reloads so we never leave two handler sets racing the runtime's
 // event bus.
 let _triggerEventBridge: { stop: () => void } | null = null;
+
+// Module-level handle for the Milady n8n credential provider. Reset across
+// hot-reloads so a stale instance does not stay registered against the
+// previous runtime's services map.
+let _n8nCredentialProvider: { stop: () => void } | null = null;
 
 async function ensureN8nAuthBridge(runtime: AgentRuntime): Promise<void> {
   if (_n8nAuthBridge) {
@@ -650,6 +661,34 @@ async function ensureTriggerEventBridge(runtime: AgentRuntime): Promise<void> {
   } catch (err) {
     logger.warn(
       `[eliza] Failed to start trigger event bridge: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+async function ensureN8nCredentialProvider(
+  runtime: AgentRuntime,
+): Promise<void> {
+  if (_n8nCredentialProvider) {
+    try {
+      _n8nCredentialProvider.stop();
+    } catch {
+      /* ignore */
+    }
+    _n8nCredentialProvider = null;
+  }
+  try {
+    const { startMiladyN8nCredentialProvider } = await import(
+      "../services/n8n-credential-provider.js"
+    );
+    _n8nCredentialProvider = startMiladyN8nCredentialProvider(runtime, {
+      getConfig: () => loadElizaConfig(),
+    });
+    logger.info("[eliza] n8n credential provider registered");
+  } catch (err) {
+    logger.warn(
+      `[eliza] Failed to register n8n credential provider: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -1405,6 +1444,17 @@ export async function startEliza(
             /* ignore */
           }
           _triggerEventBridge = null;
+        }
+        // Drop the credential provider from runtime.services so a
+        // hot-reloaded runtime does not see a stale provider bound to
+        // the previous instance.
+        if (_n8nCredentialProvider) {
+          try {
+            _n8nCredentialProvider.stop();
+          } catch {
+            /* ignore */
+          }
+          _n8nCredentialProvider = null;
         }
         // Stop the n8n sidecar if it was started during this session. The
         // singleton is lazily constructed, so this is a no-op when n8n was

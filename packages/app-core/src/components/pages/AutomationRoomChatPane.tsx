@@ -400,6 +400,16 @@ export function AutomationRoomChatPane({
 
       if (WORKFLOW_ACTION_KEYWORDS.test(response.text ?? streamedText)) {
         onAutomationMutated();
+        // Dispatch a global invalidate so the Overview list / sidebar in
+        // AutomationsView refreshes without manual F5. The local
+        // `onAutomationMutated` callback only refreshes the panel that
+        // owns this pane (e.g. N8nWorkflowsPanel) and never reaches the
+        // sibling Overview list.
+        try {
+          window.dispatchEvent(new Event("milady:automations:invalidate"));
+        } catch {
+          /* SSR / non-DOM env — no-op */
+        }
       }
     } catch (error) {
       if ((error as { name?: string }).name === "AbortError") {
@@ -644,7 +654,12 @@ export function AutomationRoomChatPane({
         <Textarea
           ref={composerRef}
           variant="default"
-          className="min-h-[38px] max-h-[150px] flex-1 min-w-0 resize-none overflow-y-hidden rounded-lg border border-border/40 bg-bg/40 px-3 py-2 text-sm text-txt placeholder:text-muted/60 focus:border-accent/40 focus:outline-none focus-visible:ring-0"
+          // Autoresize is owned entirely by the useEffect at the top of this
+          // file — it sets `style.height` + `style.overflowY` per content.
+          // No `overflow-y-*` class here: a Tailwind class would race the
+          // inline style and clip text past the 150px cap (the user-reported
+          // "I can't type more than ~50 chars" bug).
+          className="min-h-[38px] max-h-[150px] flex-1 min-w-0 resize-none rounded-lg border border-border/40 bg-bg/40 px-3 py-2 text-sm text-txt placeholder:text-muted/60 focus:border-accent/40 focus:outline-none focus-visible:ring-0"
           rows={1}
           aria-label={assistantLabel}
           placeholder={placeholder}

@@ -427,6 +427,11 @@ export class TaskService extends Service {
 					newMeta.updateInterval = baseInterval;
 				}
 				await this.runtime.updateTask(task.id, { metadata: newMeta });
+				// Mark dirty so the next checkTasks() tick re-queries the
+				// freshly-written metadata. Without this, a repeat task that
+				// updates its own state (e.g. trigger runCount) only fires
+				// once because subsequent ticks skip the DB query.
+				this.markDirty();
 			} else {
 				await this.runtime.deleteTask(task.id);
 				this.runtime.logger.debug(
@@ -475,6 +480,10 @@ export class TaskService extends Service {
 					);
 				}
 				await this.runtime.updateTask(task.id, { metadata: newMeta });
+				// Mark dirty so the next tick re-queries with the updated
+				// failureCount / paused / backoff interval. Otherwise the task
+				// goes silent after the first failure.
+				this.markDirty();
 			} else if (task.id) {
 				await this.runtime.deleteTask(task.id);
 				this.runtime.logger.debug(

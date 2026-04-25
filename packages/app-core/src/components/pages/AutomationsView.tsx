@@ -707,6 +707,18 @@ function useAutomationsViewController() {
       window.removeEventListener("milady:automations:setFilter", handler);
   }, []);
 
+  // When a chat-driven action lands a new/updated/deleted trigger or workflow,
+  // the streaming hook dispatches `milady:automations:invalidate`. Without
+  // this listener the user sees stale sidebar+list state until manual F5.
+  useEffect(() => {
+    const handler = () => {
+      void Promise.all([refreshAutomations(), ensureTriggersLoaded()]);
+    };
+    window.addEventListener("milady:automations:invalidate", handler);
+    return () =>
+      window.removeEventListener("milady:automations:invalidate", handler);
+  }, [ensureTriggersLoaded, refreshAutomations]);
+
   const allItems = automationItems;
   const filteredItems = useMemo(() => {
     switch (filter) {
