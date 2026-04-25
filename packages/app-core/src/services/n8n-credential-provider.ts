@@ -43,10 +43,13 @@ export interface ConnectorConfigLike {
     telegram?: { enabled?: boolean; botToken?: string };
     gmail?: {
       enabled?: boolean;
+      clientId?: string;
+      clientSecret?: string;
       accessToken?: string;
       refreshToken?: string;
       expiresAt?: number;
       scope?: string;
+      email?: string;
     };
     slack?: {
       enabled?: boolean;
@@ -64,6 +67,16 @@ export interface MiladyN8nCredentialProviderOptions {
    * restart for the next workflow deploy.
    */
   getConfig: () => ConnectorConfigLike;
+  /**
+   * Persists the config back to disk. Used to update Gmail tokens after a
+   * refresh-token flow runs. If omitted, refreshed tokens are still
+   * returned to the caller but won't survive a process restart.
+   */
+  saveConfig?: (config: ConnectorConfigLike) => void;
+  /** Test injection seam — defaults to fetch. */
+  fetchImpl?: typeof fetch;
+  /** Test injection seam — defaults to Date.now. */
+  now?: () => number;
 }
 
 type CredentialProviderResult =
@@ -82,32 +95,30 @@ const DISCORD_TYPES = new Set([
   "discordWebhookApi",
 ]);
 const TELEGRAM_TYPES = new Set(["telegramApi"]);
-const OAUTH_DEFERRED_TYPES = new Set([
+/**
+ * Types not handled by a dedicated branch above but listed as "supported"
+ * for the plugin's pre-flight check, so workflows that need them surface
+ * `needs_auth` deep-links instead of "unsupported integration" errors.
+ * Kept narrow on purpose — adding a type here is a promise the Settings UI
+ * has a panel for it.
+ */
+const OAUTH_DEFERRED_TYPES = new Set<string>([]);
+
+const OAUTH_DEEP_LINK_PLATFORM: Record<string, string> = {};
+
+export const MILADY_SUPPORTED_CRED_TYPES: ReadonlySet<string> = new Set([
+  ...DISCORD_TYPES,
+  ...TELEGRAM_TYPES,
+  // Gmail OAuth types
   "gmailOAuth2",
   "gmailOAuth2Api",
   "googleOAuth2Api",
   "googleSheetsOAuth2Api",
   "googleCalendarOAuth2Api",
   "googleDriveOAuth2Api",
+  // Slack OAuth types
   "slackApi",
   "slackOAuth2Api",
-]);
-
-const OAUTH_DEEP_LINK_PLATFORM: Record<string, string> = {
-  gmailOAuth2: "gmail",
-  gmailOAuth2Api: "gmail",
-  googleOAuth2Api: "gmail",
-  googleSheetsOAuth2Api: "gmail",
-  googleCalendarOAuth2Api: "gmail",
-  googleDriveOAuth2Api: "gmail",
-  slackApi: "slack",
-  slackOAuth2Api: "slack",
-};
-
-export const MILADY_SUPPORTED_CRED_TYPES: ReadonlySet<string> = new Set([
-  ...DISCORD_TYPES,
-  ...TELEGRAM_TYPES,
-  ...OAUTH_DEFERRED_TYPES,
 ]);
 
 export interface MiladyN8nCredentialProviderHandle {
@@ -122,6 +133,21 @@ export interface MiladyN8nCredentialProviderHandle {
   stop: () => void;
 }
 
+const GMAIL_TYPES = new Set([
+  "gmailOAuth2",
+  "gmailOAuth2Api",
+  "googleOAuth2Api",
+  "googleSheetsOAuth2Api",
+  "googleCalendarOAuth2Api",
+  "googleDriveOAuth2Api",
+]);
+
+const SLACK_TYPES = new Set(["slackApi", "slackOAuth2Api"]);
+
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+/** Refresh access tokens that expire within this window (ms). */
+const REFRESH_LEAD_MS = 60 * 1000;
+
 /**
  * Build the provider instance. Returns the service shape ready to be
  * registered into `runtime.services` under `SERVICE_TYPE`. The runtime's
@@ -132,7 +158,96 @@ export function startMiladyN8nCredentialProvider(
   runtime: AgentRuntime,
   options: MiladyN8nCredentialProviderOptions,
 ): MiladyN8nCredentialProviderHandle {
-  const { getConfig } = options;
+  const { getConfig, saveConfig } = options;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const now = options.now ?? Date.now;
+
+  /**
+   * Refresh a Gmail access token using the refresh token. Returns the new
+   * `{accessToken, expiresAt}` and persists them back via `saveConfig` when
+   * available so other consumers (and process restarts) see the fresh value.
+   * Returns null on failure — the caller should fall back to needs_auth.
+   */
+  const refreshGmailAccessToken = async (
+    config: ConnectorConfigLike,
+  ): Promise<
+    { accessToken: string; expiresAt: number; scope?: string } | null
+  > => {
+    const gmail = config.connectors?.gmail;
+    if (
+      !gmail?.refreshToken ||
+      !gmail.clientId ||
+      !gmail.clientSecret
+    ) {
+      return null;
+    }
+    try {
+      const body = new URLSearchParams({
+        client_id: gmail.clientId,
+        client_secret: gmail.clientSecret,
+        refresh_token: gmail.refreshToken,
+        grant_type: "refresh_token",
+      });
+      const res = await fetchImpl(GOOGLE_TOKEN_URL, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        runtime.logger.warn?.(
+          {
+            src: "n8n-credential-provider",
+            status: res.status,
+            body: text.slice(0, 200),
+          },
+          "Gmail refresh-token exchange failed",
+        );
+        return null;
+      }
+      const data = (await res.json()) as {
+        access_token?: string;
+        expires_in?: number;
+        scope?: string;
+      };
+      if (!data.access_token) return null;
+      const expiresIn =
+        typeof data.expires_in === "number" ? data.expires_in : 3600;
+      const expiresAt = now() + expiresIn * 1000;
+      // Persist back so subsequent resolves and restarts see the refreshed
+      // value. saveConfig is optional — without it the new token is only
+      // returned to the current caller.
+      if (saveConfig) {
+        const nextConnectors = {
+          ...((config.connectors ?? {}) as Record<string, unknown>),
+        };
+        nextConnectors.gmail = {
+          ...gmail,
+          accessToken: data.access_token,
+          expiresAt,
+          ...(data.scope ? { scope: data.scope } : {}),
+        };
+        saveConfig({
+          ...(config as Record<string, unknown>),
+          connectors: nextConnectors,
+        } as ConnectorConfigLike);
+      }
+      return {
+        accessToken: data.access_token,
+        expiresAt,
+        scope: data.scope,
+      };
+    } catch (err) {
+      runtime.logger.warn?.(
+        {
+          src: "n8n-credential-provider",
+          error: err instanceof Error ? err.message : String(err),
+        },
+        "Gmail refresh-token exchange threw",
+      );
+      return null;
+    }
+  };
 
   const resolve = async (
     _userId: string,
@@ -178,6 +293,66 @@ export function startMiladyN8nCredentialProvider(
       return {
         status: "credential_data",
         data: { accessToken: botToken, baseUrl: "https://api.telegram.org" },
+      };
+    }
+
+    if (GMAIL_TYPES.has(credType)) {
+      const gmail = connectors.gmail;
+      // No tokens at all — user hasn't run the OAuth flow yet.
+      if (!gmail?.refreshToken || !gmail.clientId || !gmail.clientSecret) {
+        return {
+          status: "needs_auth",
+          authUrl: "milady://settings/connectors/gmail",
+        };
+      }
+      let accessToken = gmail.accessToken?.trim();
+      const expiresAt =
+        typeof gmail.expiresAt === "number" ? gmail.expiresAt : 0;
+      const needsRefresh =
+        !accessToken || expiresAt - now() < REFRESH_LEAD_MS;
+      if (needsRefresh) {
+        const refreshed = await refreshGmailAccessToken(config);
+        if (!refreshed) {
+          return {
+            status: "needs_auth",
+            authUrl: "milady://settings/connectors/gmail",
+          };
+        }
+        accessToken = refreshed.accessToken;
+      }
+      // n8n's gmailOAuth2 credential expects `oauthTokenData.access_token` +
+      // matching `clientId`/`clientSecret` so it can refresh on its side too.
+      return {
+        status: "credential_data",
+        data: {
+          clientId: gmail.clientId,
+          clientSecret: gmail.clientSecret,
+          oauthTokenData: {
+            access_token: accessToken,
+            refresh_token: gmail.refreshToken,
+            scope: gmail.scope ?? "",
+            token_type: "Bearer",
+            expiry_date: expiresAt || 0,
+          },
+        },
+      };
+    }
+
+    if (SLACK_TYPES.has(credType)) {
+      // Slack OAuth not yet wired (P2 follow-up). For now defer to the
+      // Settings panel when the user asks for it.
+      const slack = connectors.slack;
+      if (slack?.accessToken) {
+        return {
+          status: "credential_data",
+          data: {
+            accessToken: slack.accessToken,
+          },
+        };
+      }
+      return {
+        status: "needs_auth",
+        authUrl: "milady://settings/connectors/slack",
       };
     }
 

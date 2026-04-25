@@ -31,6 +31,7 @@ import {
 import { CodingAgentSettingsSection } from "../../app-shell/task-coordinator-slots.js";
 import { useApp } from "../../state";
 import { WidgetHost } from "../../widgets";
+import { GmailConnectorPanel } from "../connectors/GmailConnectorPanel";
 import { LocalInferencePanel } from "../local-inference/LocalInferencePanel";
 import { AppearanceSettingsSection } from "../settings/AppearanceSettingsSection";
 import { CapabilitiesSection } from "../settings/CapabilitiesSection";
@@ -149,6 +150,23 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     description: "settings.sections.cloud.desc",
     keywords: ["cloud", "billing", "credits", "auth", "subscription"],
     keywordKeys: ["settings.keyword.cloud", "settings.keyword.billing"],
+    level: "simple",
+  },
+  {
+    id: "integrations",
+    label: "settings.sections.integrations.label",
+    description: "settings.sections.integrations.desc",
+    keywords: [
+      "gmail",
+      "google",
+      "slack",
+      "oauth",
+      "integration",
+      "connector",
+      "n8n",
+      "workflow",
+      "credential",
+    ],
     level: "simple",
   },
   {
@@ -1092,6 +1110,22 @@ export function SettingsView({
           ref={registerContentItem("cloud")}
         >
           <CloudDashboard />
+        </SettingsSection>
+      )}
+
+      {visibleSectionIds.has("integrations") && (
+        <SettingsSection
+          id="integrations"
+          title={t("settings.sections.integrations.label", {
+            defaultValue: "Integrations",
+          })}
+          description={t("settings.sections.integrations.desc", {
+            defaultValue:
+              "Connect external accounts (Gmail, Slack) so n8n workflows can read and write through them.",
+          })}
+          ref={registerContentItem("integrations")}
+        >
+          <GmailConnectorPanel />
         </SettingsSection>
       )}
 

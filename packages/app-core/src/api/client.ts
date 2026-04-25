@@ -234,6 +234,7 @@ import "./client-lifeops";
 import "./client-imessage";
 import "./client-local-inference";
 import "./client-n8n";
+import "./client-oauth";
 import "./client-skills";
 import "./client-wallet";
 import "@elizaos/app-vincent/client";

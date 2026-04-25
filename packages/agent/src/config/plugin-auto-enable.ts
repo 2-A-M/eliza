@@ -209,6 +209,13 @@ export function isConnectorConfigured(
       return Boolean(config.serverUrl && config.password);
     case "discordLocal":
       return Boolean(config.clientId && config.clientSecret);
+    case "gmail":
+      // OAuth-shaped: needs both refresh token (long-lived) and the user's
+      // own Google Cloud client credentials. The provider uses the refresh
+      // token to mint access tokens via clientId+clientSecret.
+      return Boolean(
+        config.refreshToken && config.clientId && config.clientSecret,
+      );
     case "imessage":
       return Boolean(config.cliPath);
     case "signal":

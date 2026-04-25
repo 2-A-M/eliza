@@ -617,6 +617,36 @@ export const SlackConfigSchema = SlackAccountSchema.extend({
   }
 });
 
+/**
+ * Gmail OAuth connector — distinct from messaging-bot connectors.
+ *
+ * Holds the user's Google OAuth client credentials (registered in their
+ * Google Cloud project) and the access/refresh tokens minted by the
+ * loopback OAuth flow at `GET /api/oauth/gmail/{initiate,callback}`.
+ *
+ * Read by `MiladyN8nCredentialProvider` to satisfy `gmailOAuth2` /
+ * `gmailOAuth2Api` / `googleSheetsOAuth2Api` / etc. credential types.
+ */
+export const GmailOAuthConnectorConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    /** OAuth client id from the user's Google Cloud project. */
+    clientId: z.string().optional(),
+    /** OAuth client secret from the user's Google Cloud project. */
+    clientSecret: z.string().optional(),
+    /** Latest access token (short-lived). */
+    accessToken: z.string().optional(),
+    /** Long-lived refresh token used to mint new access tokens. */
+    refreshToken: z.string().optional(),
+    /** Epoch ms at which `accessToken` expires; refresher must run before this. */
+    expiresAt: z.number().int().nonnegative().optional(),
+    /** Granted scopes (space-delimited per Google's response). */
+    scope: z.string().optional(),
+    /** Email address of the consenting account, if known. */
+    email: z.string().optional(),
+  })
+  .strict();
+
 export const SignalAccountSchemaBase = z
   .object({
     name: z.string().optional(),

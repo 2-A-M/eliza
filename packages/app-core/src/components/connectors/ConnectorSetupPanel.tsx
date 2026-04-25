@@ -2,6 +2,7 @@ import type React from "react";
 import { getBootConfig } from "../../config";
 import { BlueBubblesStatusPanel } from "./BlueBubblesStatusPanel";
 import { DiscordLocalConnectorPanel } from "./DiscordLocalConnectorPanel";
+import { GmailConnectorPanel } from "./GmailConnectorPanel";
 import { IMessageStatusPanel } from "./IMessageStatusPanel";
 import { SignalQrOverlay } from "./SignalQrOverlay";
 import { TelegramAccountConnectorPanel } from "./TelegramAccountConnectorPanel";
@@ -59,6 +60,7 @@ export function hasConnectorSetupPanel(pluginId: string): boolean {
     case "bluebubbles":
     case "imessage":
     case "telegram":
+    case "gmail":
       return true;
     default:
       return false;
@@ -101,6 +103,8 @@ export function ConnectorSetupPanel({ pluginId }: { pluginId: string }) {
       return <IMessageStatusPanel />;
     case "telegram":
       return <TelegramBotSetupPanel />;
+    case "gmail":
+      return <GmailConnectorPanel />;
     default:
       return null;
   }

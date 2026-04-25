@@ -28,6 +28,7 @@ export * from "./config-ui";
 export * from "./connectors/BlueBubblesStatusPanel";
 export * from "./connectors/ConnectorSetupPanel";
 export * from "./connectors/DiscordLocalConnectorPanel";
+export * from "./connectors/GmailConnectorPanel";
 export * from "./connectors/SignalQrOverlay";
 export * from "./connectors/WhatsAppQrOverlay";
 export * from "./conversations/ConversationsSidebar";

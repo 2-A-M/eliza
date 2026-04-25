@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { loadElizaConfig } from "@elizaos/agent/config/config";
+import { loadElizaConfig, saveElizaConfig } from "@elizaos/agent/config/config";
 import { resolveUserPath } from "@elizaos/agent/config/paths";
 import { resolveDefaultAgentWorkspaceDir } from "@elizaos/agent/providers/workspace";
 import {
@@ -684,6 +684,19 @@ async function ensureN8nCredentialProvider(
     );
     _n8nCredentialProvider = startMiladyN8nCredentialProvider(runtime, {
       getConfig: () => loadElizaConfig(),
+      saveConfig: (config) => {
+        try {
+          // saveElizaConfig accepts the same shape loadElizaConfig returns;
+          // the cred provider's ConnectorConfigLike is a structural subset.
+          saveElizaConfig(config as Parameters<typeof saveElizaConfig>[0]);
+        } catch (err) {
+          logger.warn(
+            `[eliza] credential provider saveConfig failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      },
     });
     logger.info("[eliza] n8n credential provider registered");
   } catch (err) {

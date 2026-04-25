@@ -164,6 +164,7 @@ import { handleCodingAgentsFallback } from "./coding-agents-fallback-routes.js";
 import { handleConfigRoutes } from "./config-routes.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { handleConnectorRoutes } from "./connector-routes.js";
+import { handleOAuthRoutes } from "./oauth-routes.js";
 import { extractConversationMetadataFromRoom } from "./conversation-metadata.js";
 import { handleConversationRoutes } from "./conversation-routes.js";
 import { handleCuratedSkillsRoutes } from "./curated-skills-routes.js";
@@ -1972,6 +1973,25 @@ async function handleRequest(
       redactConfigSecrets,
       isBlockedObjectKey,
       cloneWithoutBlockedObjectKeys,
+    })
+  ) {
+    return;
+  }
+
+  // ── OAuth routes (/api/oauth/<platform>/{initiate,callback}) ─────────
+  // Local Gmail/Slack OAuth flows that complement the bot-token paste
+  // path. The credential provider reads the resulting tokens out of
+  // `connectors.<platform>` to satisfy n8n credential resolution.
+  if (
+    await handleOAuthRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      state,
+      json,
+      error,
+      saveElizaConfig,
     })
   ) {
     return;

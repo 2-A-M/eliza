@@ -109,7 +109,7 @@ describe("startMiladyN8nCredentialProvider", () => {
     });
   });
 
-  it("returns needs_auth with deep-link for gmailOAuth2 (deferred to P2 OAuth flow)", async () => {
+  it("returns needs_auth for gmailOAuth2 when refreshToken/clientId/clientSecret missing", async () => {
     const handle = startMiladyN8nCredentialProvider(runtime, {
       getConfig: () => makeConfig(),
     });
@@ -120,7 +120,118 @@ describe("startMiladyN8nCredentialProvider", () => {
     });
   });
 
-  it("returns needs_auth with deep-link for slackOAuth2Api", async () => {
+  it("returns credential_data with oauthTokenData for gmailOAuth2 when accessToken still fresh", async () => {
+    const fixedNow = 1_700_000_000_000;
+    const handle = startMiladyN8nCredentialProvider(runtime, {
+      getConfig: () =>
+        makeConfig({
+          connectors: {
+            gmail: {
+              enabled: true,
+              clientId: "client-id",
+              clientSecret: "client-secret",
+              accessToken: "fresh-access",
+              refreshToken: "long-lived-refresh",
+              expiresAt: fixedNow + 5 * 60 * 1000, // 5 min in the future
+              scope: "https://www.googleapis.com/auth/gmail.readonly",
+            },
+          },
+        }),
+      now: () => fixedNow,
+    });
+    const result = await handle.service.resolve(USER_ID, "gmailOAuth2");
+    expect(result).toEqual({
+      status: "credential_data",
+      data: {
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        oauthTokenData: {
+          access_token: "fresh-access",
+          refresh_token: "long-lived-refresh",
+          scope: "https://www.googleapis.com/auth/gmail.readonly",
+          token_type: "Bearer",
+          expiry_date: fixedNow + 5 * 60 * 1000,
+        },
+      },
+    });
+  });
+
+  it("refreshes the Gmail access token when expiry is within the lead window", async () => {
+    const fixedNow = 1_700_000_000_000;
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          access_token: "refreshed-access",
+          expires_in: 3600,
+          scope: "https://www.googleapis.com/auth/gmail.readonly",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const savedConfigs: ConnectorConfigLike[] = [];
+    const handle = startMiladyN8nCredentialProvider(runtime, {
+      getConfig: () =>
+        makeConfig({
+          connectors: {
+            gmail: {
+              enabled: true,
+              clientId: "client-id",
+              clientSecret: "client-secret",
+              accessToken: "stale-access",
+              refreshToken: "long-lived-refresh",
+              // 30s in the future — inside the 60s lead window → refresh.
+              expiresAt: fixedNow + 30_000,
+            },
+          },
+        }),
+      saveConfig: (cfg) => savedConfigs.push(cfg),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      now: () => fixedNow,
+    });
+    const result = await handle.service.resolve(USER_ID, "gmailOAuth2");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(savedConfigs.length).toBe(1);
+    expect(
+      savedConfigs[0].connectors?.gmail?.accessToken,
+    ).toBe("refreshed-access");
+    expect(result).toMatchObject({
+      status: "credential_data",
+      data: {
+        oauthTokenData: { access_token: "refreshed-access" },
+      },
+    });
+  });
+
+  it("returns needs_auth when Gmail refresh-token exchange fails", async () => {
+    const fixedNow = 1_700_000_000_000;
+    const fetchImpl = vi.fn(async () =>
+      new Response("invalid_grant", { status: 400 }),
+    );
+    const handle = startMiladyN8nCredentialProvider(runtime, {
+      getConfig: () =>
+        makeConfig({
+          connectors: {
+            gmail: {
+              enabled: true,
+              clientId: "client-id",
+              clientSecret: "client-secret",
+              accessToken: "stale-access",
+              refreshToken: "expired-refresh",
+              expiresAt: fixedNow - 10_000, // already expired
+            },
+          },
+        }),
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      now: () => fixedNow,
+    });
+    const result = await handle.service.resolve(USER_ID, "gmailOAuth2");
+    expect(result).toEqual({
+      status: "needs_auth",
+      authUrl: "milady://settings/connectors/gmail",
+    });
+  });
+
+  it("returns needs_auth for slackOAuth2Api when accessToken missing", async () => {
     const handle = startMiladyN8nCredentialProvider(runtime, {
       getConfig: () => makeConfig(),
     });
@@ -128,6 +239,20 @@ describe("startMiladyN8nCredentialProvider", () => {
     expect(result).toEqual({
       status: "needs_auth",
       authUrl: "milady://settings/connectors/slack",
+    });
+  });
+
+  it("returns credential_data for slackApi when accessToken present", async () => {
+    const handle = startMiladyN8nCredentialProvider(runtime, {
+      getConfig: () =>
+        makeConfig({
+          connectors: { slack: { enabled: true, accessToken: "xoxb-foo" } },
+        }),
+    });
+    const result = await handle.service.resolve(USER_ID, "slackApi");
+    expect(result).toEqual({
+      status: "credential_data",
+      data: { accessToken: "xoxb-foo" },
     });
   });
 
