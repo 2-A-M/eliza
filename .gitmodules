@@ -118,3 +118,7 @@
 	path = plugins/plugin-agent-orchestrator
 	url = https://github.com/elizaos-plugins/plugin-agent-orchestrator.git
 	branch = alpha
+[submodule "plugins/plugin-n8n-workflow"]
+	path = plugins/plugin-n8n-workflow
+	url = https://github.com/elizaos-plugins/plugin-n8n-workflow.git
+	branch = main
