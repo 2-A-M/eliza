@@ -346,6 +346,18 @@ export function startMiladyN8nRuntimeContextProvider(
       }
     }
 
+    runtime.logger.debug?.(
+      {
+        src: "n8n-runtime-context-provider",
+        supportedCredCount: supportedCredentials.length,
+        supportedCredTypes: supportedCredentials.map((c) => c.credType),
+        factCount: facts.length,
+        wantsDiscord,
+        wantsGmail,
+        relevantCredTypes: input.relevantCredTypes,
+      },
+      "n8n-runtime-context-provider: returning context",
+    );
     return { supportedCredentials, facts };
   };
 
