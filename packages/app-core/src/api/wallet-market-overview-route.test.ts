@@ -2,19 +2,18 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { WalletMarketOverviewResponse } from "@elizaos/shared/contracts/wallet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { fetchWithTimeoutGuardMock } = vi.hoisted(() => ({
-  fetchWithTimeoutGuardMock: vi.fn(),
-}));
-
-vi.mock("@elizaos/agent/api/server", () => ({
-  fetchWithTimeoutGuard: fetchWithTimeoutGuardMock,
-}));
-
 import {
   __resetWalletMarketOverviewCacheForTests,
+  __setFetchWithTimeoutGuardForTests,
   handleWalletMarketOverviewRoute,
 } from "./wallet-market-overview-route";
+
+// Test seam — replaces the previous module-level mock of
+// @elizaos/agent/api/server that tripped audit-server-test-surface.mjs
+// (the "app-core-api-tests" surface forbids module-level mocks). The route
+// module now exposes __setFetchWithTimeoutGuardForTests; tests inject a
+// vi.fn stub through it and drive the same assertions via the injected spy.
+const fetchWithTimeoutGuardMock = vi.fn();
 
 interface Harness {
   baseUrl: string;
@@ -198,12 +197,14 @@ describe("wallet-market-overview-route", () => {
 
   beforeEach(async () => {
     fetchWithTimeoutGuardMock.mockReset();
+    __setFetchWithTimeoutGuardForTests(fetchWithTimeoutGuardMock);
     __resetWalletMarketOverviewCacheForTests();
     harness = await startHarness();
   });
 
   afterEach(async () => {
     await harness.dispose();
+    __setFetchWithTimeoutGuardForTests(null);
     fetchWithTimeoutGuardMock.mockReset();
     __resetWalletMarketOverviewCacheForTests();
   });

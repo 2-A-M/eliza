@@ -1589,6 +1589,12 @@ export function applyN8nConfigToEnv(
 
   // 3. Fallback — leave unset. Legacy `config.env.vars` entries (N8N_HOST /
   //    N8N_API_KEY) still flow through the generic env-var pump in startEliza.
+  //    For local-dev where the sidecar key is persisted at
+  //    `<stateDir>/n8n/api-key` but n8n.apiKey hasn't been hydrated into
+  //    `config.n8n` yet at this call site, users should set `N8N_API_KEY`
+  //    explicitly in `.env` to unblock plugin-n8n-workflow's service init.
+  //    See workflows-automations plan §10 parking-lot item on startup-race
+  //    between applyN8nConfigToEnv and ensureN8nAutoStart.
 }
 
 function resolveDefaultPgliteDataDir(config: ElizaConfig): string {

@@ -53,7 +53,11 @@ import { createUserNameProvider } from "../providers/user-name.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { ElizaCharacterPersistenceService } from "../services/character-persistence.js";
-import { createTriggerTaskAction } from "../triggers/action.js";
+import {
+  createTriggerTaskAction,
+  deleteTriggerTaskAction,
+  updateTriggerTaskAction,
+} from "../triggers/action.js";
 import { registerTriggerTaskWorker } from "../triggers/runtime.js";
 import { setCustomActionsRuntime } from "./custom-actions.js";
 
@@ -207,6 +211,8 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       sendAdminMessageAction,
       terminalAction,
       createTriggerTaskAction,
+      updateTriggerTaskAction,
+      deleteTriggerTaskAction,
       manageTasksAction,
       setUserNameAction,
       skillCommandAction,

@@ -1283,6 +1283,7 @@ const ACTION_REPAIR_PASSIVE_ACTIONS = new Set(
 const EXPLICIT_INTENT_ACTIONS = new Set(
 	[
 		"SPAWN_AGENT",
+		// CREATE_TRIGGER_TASK + schedule-flavored similes (Session 15).
 		"CREATE_TRIGGER_TASK",
 		"CREATE_TRIGGER",
 		"SCHEDULE_TRIGGER",
@@ -1293,6 +1294,73 @@ const EXPLICIT_INTENT_ACTIONS = new Set(
 		"SCHEDULE_AUTOMATION",
 		"CREATE_CRON",
 		"CREATE_RECURRING",
+		// UPDATE_TRIGGER_TASK + similes (Session 16). Edit phrasings
+		// like "change the ping log to every 15 minutes" have even
+		// weaker keyword-overlap with the action's short description
+		// than CREATE does — without this protection the corrector
+		// reroutes to whichever long-description action fuzzy-matches
+		// "change" (typically LIFE's rename flow).
+		"UPDATE_TRIGGER_TASK",
+		"UPDATE_TRIGGER",
+		"MODIFY_TRIGGER",
+		"EDIT_TRIGGER",
+		"CHANGE_TRIGGER",
+		"RENAME_TRIGGER",
+		"UPDATE_SCHEDULE",
+		"MODIFY_SCHEDULE",
+		"EDIT_SCHEDULE",
+		"CHANGE_SCHEDULE",
+		"RESCHEDULE_TRIGGER",
+		"ADJUST_SCHEDULE",
+		// DELETE_TRIGGER_TASK + similes (Session 16). Same logic —
+		// "delete the status check" is pure target-selection intent
+		// with no keyword-overlap signal the corrector can use.
+		"DELETE_TRIGGER_TASK",
+		"DELETE_TRIGGER",
+		"REMOVE_TRIGGER",
+		"CANCEL_TRIGGER",
+		"STOP_TRIGGER",
+		"DISABLE_TRIGGER",
+		"CANCEL_SCHEDULE",
+		"STOP_SCHEDULE",
+		"REMOVE_SCHEDULE",
+		"DELETE_SCHEDULE",
+		// @elizaos/plugin-n8n-workflow actions (Session 16). When the
+		// user asks to create/edit/delete an n8n workflow on the
+		// automations page, these picks must survive the corrector the
+		// same way trigger lifecycle actions do — otherwise a prompt
+		// like "create an n8n workflow that reads my Gmail and posts a
+		// summary to Discord" gets rerouted to OWNER_INBOX (whose
+		// description mentions Gmail and summaries) or similar.
+		"CREATE_N8N_WORKFLOW",
+		"CREATE_WORKFLOW",
+		"BUILD_WORKFLOW",
+		"GENERATE_WORKFLOW",
+		"MAKE_AUTOMATION",
+		"SETUP_WORKFLOW",
+		"CONFIRM_WORKFLOW",
+		"DEPLOY_WORKFLOW",
+		"CANCEL_WORKFLOW",
+		"MODIFY_EXISTING_N8N_WORKFLOW",
+		"EDIT_EXISTING_WORKFLOW",
+		"UPDATE_EXISTING_WORKFLOW",
+		"CHANGE_EXISTING_WORKFLOW",
+		"LOAD_WORKFLOW_FOR_EDIT",
+		"ACTIVATE_N8N_WORKFLOW",
+		"ACTIVATE_WORKFLOW",
+		"ENABLE_WORKFLOW",
+		"START_WORKFLOW",
+		"TURN_ON_WORKFLOW",
+		"DEACTIVATE_N8N_WORKFLOW",
+		"DEACTIVATE_WORKFLOW",
+		"DISABLE_WORKFLOW",
+		"STOP_WORKFLOW",
+		"TURN_OFF_WORKFLOW",
+		"DELETE_N8N_WORKFLOW",
+		"DELETE_WORKFLOW",
+		"REMOVE_WORKFLOW",
+		"DESTROY_WORKFLOW",
+		"GET_N8N_EXECUTIONS",
 	].map(normalizeActionIdentifier),
 );
 

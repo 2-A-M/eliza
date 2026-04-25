@@ -1,6 +1,17 @@
 import type http from "node:http";
-import { fetchWithTimeoutGuard } from "@elizaos/agent/api/server";
+import { fetchWithTimeoutGuard as defaultFetchWithTimeoutGuard } from "@elizaos/agent/api/server";
 import { logger } from "@elizaos/core";
+
+// Test-only dependency seam: tests inject a stub via
+// `__setFetchWithTimeoutGuardForTests` to avoid touching real CoinGecko /
+// Polymarket / Cloud-preview endpoints. The audit at
+// `audit-server-test-surface.mjs` disallows `vi.mock` in api test files, so
+// tests must rewire the dependency via this hook instead.
+type FetchWithTimeoutGuard = typeof defaultFetchWithTimeoutGuard;
+let fetchWithTimeoutGuardImpl: FetchWithTimeoutGuard =
+  defaultFetchWithTimeoutGuard;
+const fetchWithTimeoutGuard: FetchWithTimeoutGuard = (url, init, timeoutMs) =>
+  fetchWithTimeoutGuardImpl(url, init, timeoutMs);
 import type {
   WalletMarketMover,
   WalletMarketOverviewResponse,
@@ -758,4 +769,14 @@ export function __resetWalletMarketOverviewCacheForTests(): void {
   cachedWalletMarketOverview = null;
   walletMarketOverviewInFlight = null;
   walletMarketRefreshBuckets.clear();
+}
+
+// Test-only: swap the outbound fetch implementation for a stub. Pass `null`
+// or `undefined` to restore the default import from `@elizaos/agent/api/server`.
+// Matches the pattern of `__resetWalletMarketOverviewCacheForTests` above —
+// these are the two seams the route module exposes for test harnesses.
+export function __setFetchWithTimeoutGuardForTests(
+  impl: FetchWithTimeoutGuard | null | undefined,
+): void {
+  fetchWithTimeoutGuardImpl = impl ?? defaultFetchWithTimeoutGuard;
 }

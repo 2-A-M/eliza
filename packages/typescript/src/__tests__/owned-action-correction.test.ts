@@ -124,4 +124,190 @@ describe("findOwnedActionCorrectionFromMetadata", () => {
 			},
 		);
 	});
+
+	// Session 16 — UPDATE_TRIGGER_TASK + DELETE_TRIGGER_TASK extend the same
+	// EXPLICIT_INTENT_ACTIONS protection CREATE_TRIGGER_TASK got. Edit and
+	// delete intents ("change the ping log to every 15 minutes", "delete
+	// the status check trigger") keyword-overlap with LIFE's reminder/habit
+	// rename verbs, so without the whitelist the corrector reroutes the
+	// planner's correct pick to LIFE — same failure mode Session 15 saw for
+	// CREATE, just on the UPDATE/DELETE lifecycle instead of the CREATE one.
+	describe("Session 16 — trigger UPDATE/DELETE picks are authoritative", () => {
+		const runtime = {
+			actions: [
+				{
+					name: "LIFE",
+					description:
+						"Manage the user's personal routines, habits, goals, reminders, alarms, and escalation settings through LifeOps. Edit, rename, update, delete, or remove existing habits, goals, and reminders. Cancel or stop existing tasks.",
+					similes: ["RENAME_HABIT", "DELETE_HABIT", "CANCEL_REMINDER"],
+				},
+				{
+					name: "UPDATE_TRIGGER_TASK",
+					description:
+						"Update an existing scheduled trigger's schedule, name, or instructions.",
+					similes: [
+						"UPDATE_TRIGGER",
+						"MODIFY_TRIGGER",
+						"EDIT_TRIGGER",
+						"CHANGE_TRIGGER",
+						"RENAME_TRIGGER",
+						"UPDATE_SCHEDULE",
+						"MODIFY_SCHEDULE",
+						"EDIT_SCHEDULE",
+						"CHANGE_SCHEDULE",
+						"RESCHEDULE_TRIGGER",
+						"ADJUST_SCHEDULE",
+					],
+				},
+				{
+					name: "DELETE_TRIGGER_TASK",
+					description:
+						"Delete an existing scheduled trigger, cron, interval, or heartbeat.",
+					similes: [
+						"DELETE_TRIGGER",
+						"REMOVE_TRIGGER",
+						"CANCEL_TRIGGER",
+						"STOP_TRIGGER",
+						"DISABLE_TRIGGER",
+						"CANCEL_SCHEDULE",
+						"STOP_SCHEDULE",
+						"REMOVE_SCHEDULE",
+						"DELETE_SCHEDULE",
+					],
+				},
+			],
+		};
+
+		it.each([
+			"UPDATE_TRIGGER_TASK",
+			"UPDATE_TRIGGER",
+			"MODIFY_TRIGGER",
+			"EDIT_TRIGGER",
+			"CHANGE_TRIGGER",
+			"RENAME_TRIGGER",
+			"UPDATE_SCHEDULE",
+			"MODIFY_SCHEDULE",
+			"EDIT_SCHEDULE",
+			"CHANGE_SCHEDULE",
+			"RESCHEDULE_TRIGGER",
+			"ADJUST_SCHEDULE",
+		])(
+			"treats update-intent %s as explicit (no override to LIFE)",
+			(actionName) => {
+				const result = findOwnedActionCorrectionFromMetadata(
+					runtime,
+					{ content: { text: "change the ping log to every 15 minutes" } },
+					{ actions: [actionName] },
+				);
+				expect(result).toBeNull();
+			},
+		);
+
+		it.each([
+			"DELETE_TRIGGER_TASK",
+			"DELETE_TRIGGER",
+			"REMOVE_TRIGGER",
+			"CANCEL_TRIGGER",
+			"STOP_TRIGGER",
+			"DISABLE_TRIGGER",
+			"CANCEL_SCHEDULE",
+			"STOP_SCHEDULE",
+			"REMOVE_SCHEDULE",
+			"DELETE_SCHEDULE",
+		])(
+			"treats delete-intent %s as explicit (no override to LIFE)",
+			(actionName) => {
+				const result = findOwnedActionCorrectionFromMetadata(
+					runtime,
+					{ content: { text: "delete the status check trigger" } },
+					{ actions: [actionName] },
+				);
+				expect(result).toBeNull();
+			},
+		);
+	});
+
+	// Session 16 — @elizaos/plugin-n8n-workflow. Same systemic issue as the
+	// trigger lifecycle actions: a prompt like "create an n8n workflow that
+	// reads my Gmail and posts a summary to Discord" keyword-overlaps with
+	// OWNER_INBOX (Gmail/summary) and OWNER_RELATIONSHIP (Discord/post)
+	// far more than with CREATE_N8N_WORKFLOW's short description. Without
+	// the whitelist protection the corrector silently reroutes the
+	// planner's correct pick and F2 (workflow creation via chat) breaks.
+	describe("Session 16 — n8n-workflow plugin picks are authoritative", () => {
+		const runtime = {
+			actions: [
+				{
+					name: "OWNER_INBOX",
+					// Truncated real OWNER_INBOX description mentioning Gmail /
+					// summaries / discord — enough to win a keyword-overlap
+					// race against CREATE_N8N_WORKFLOW's short description.
+					description:
+						"Manage the owner's Gmail inbox, email triage, daily summaries, and cross-channel inbox review. Handles reading email, summarizing threads, drafting replies, and posting digests to discord or other channels.",
+					similes: [
+						"GMAIL",
+						"CHECK_INBOX",
+						"DAILY_BRIEF",
+						"INBOX_DIGEST",
+					],
+				},
+				{
+					name: "CREATE_N8N_WORKFLOW",
+					description:
+						"Generate and deploy an n8n workflow from natural language.",
+					similes: [
+						"CREATE_WORKFLOW",
+						"BUILD_WORKFLOW",
+						"GENERATE_WORKFLOW",
+						"MAKE_AUTOMATION",
+						"SETUP_WORKFLOW",
+						"CONFIRM_WORKFLOW",
+						"DEPLOY_WORKFLOW",
+					],
+				},
+				{
+					name: "DELETE_N8N_WORKFLOW",
+					description: "Delete an n8n workflow.",
+					similes: ["DELETE_WORKFLOW", "REMOVE_WORKFLOW", "DESTROY_WORKFLOW"],
+				},
+			],
+		};
+
+		it.each([
+			"CREATE_N8N_WORKFLOW",
+			"CREATE_WORKFLOW",
+			"BUILD_WORKFLOW",
+			"GENERATE_WORKFLOW",
+			"MAKE_AUTOMATION",
+			"SETUP_WORKFLOW",
+			"CONFIRM_WORKFLOW",
+			"DEPLOY_WORKFLOW",
+		])(
+			"treats n8n create-intent %s as explicit (no override to OWNER_INBOX)",
+			(actionName) => {
+				const result = findOwnedActionCorrectionFromMetadata(
+					runtime,
+					{
+						content: {
+							text: "create an n8n workflow that reads my Gmail and posts a summary to Discord",
+						},
+					},
+					{ actions: [actionName] },
+				);
+				expect(result).toBeNull();
+			},
+		);
+
+		it.each(["DELETE_N8N_WORKFLOW", "DELETE_WORKFLOW", "REMOVE_WORKFLOW"])(
+			"treats n8n delete-intent %s as explicit",
+			(actionName) => {
+				const result = findOwnedActionCorrectionFromMetadata(
+					runtime,
+					{ content: { text: "delete the gmail-to-discord n8n workflow" } },
+					{ actions: [actionName] },
+				);
+				expect(result).toBeNull();
+			},
+		);
+	});
 });
