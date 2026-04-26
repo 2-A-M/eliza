@@ -153,13 +153,20 @@ const WORKFLOW_PROMPT_PLACEHOLDER =
   "Describe the trigger and steps, e.g. when a GitHub issue opens, summarize it and post to Discord";
 const AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT =
   "milady:automations:overview-visibility";
+const AUTOMATIONS_WORKFLOW_OPS_BUSY_EVENT =
+  "milady:automations:workflow-ops-busy";
 
 interface AutomationsOverviewVisibilityDetail {
   visible: boolean;
 }
 
+interface AutomationsWorkflowOpsBusyDetail {
+  busy: boolean;
+}
+
 type AutomationsOverviewWindow = Window & {
   __miladyAutomationsOverviewVisible?: boolean;
+  __miladyAutomationsWorkflowOpsBusy?: boolean;
 };
 
 function createWorkflowDraftId(): string {
@@ -2497,26 +2504,26 @@ function AutomationDraftPane({
             {getAutomationDisplayTitle(automation)}
           </h2>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 px-3 text-sm"
-            onClick={() => openSidebarDraftChat(DESCRIBE_WORKFLOW_PROMPT)}
-            disabled={isGenerating}
-          >
-            {DESCRIBE_WORKFLOW_PROMPT}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-3 text-sm text-danger hover:bg-danger/10 hover:text-danger"
-            onClick={() => void onDeleteDraft(automation)}
-            disabled={isGenerating}
-          >
-            Delete draft
-          </Button>
-        </div>
+        {!isGenerating && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 px-3 text-sm"
+              onClick={() => openSidebarDraftChat(DESCRIBE_WORKFLOW_PROMPT)}
+            >
+              {DESCRIBE_WORKFLOW_PROMPT}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 text-sm text-danger hover:bg-danger/10 hover:text-danger"
+              onClick={() => void onDeleteDraft(automation)}
+            >
+              Delete draft
+            </Button>
+          </div>
+        )}
       </div>
 
       {isGenerating ? (
@@ -3637,6 +3644,17 @@ function AutomationsLayout() {
     );
   }, [showDashboard]);
 
+  useEffect(() => {
+    (window as AutomationsOverviewWindow).__miladyAutomationsWorkflowOpsBusy =
+      workflowOpsBusy;
+    window.dispatchEvent(
+      new CustomEvent<AutomationsWorkflowOpsBusyDetail>(
+        AUTOMATIONS_WORKFLOW_OPS_BUSY_EVENT,
+        { detail: { busy: workflowOpsBusy } },
+      ),
+    );
+  }, [workflowOpsBusy]);
+
   const syncSubpageFromLocation = useCallback(() => {
     const pathname = getNavigationPathFromWindow();
     const nextSubpage = getAutomationSubpageFromPath(pathname);
@@ -4754,25 +4772,50 @@ export function AutomationsDesktopShell() {
       .__miladyAutomationsOverviewVisible;
     return flag === undefined ? true : Boolean(flag);
   });
+  const [workflowOpsBusy, setWorkflowOpsBusy] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(
+      (window as AutomationsOverviewWindow).__miladyAutomationsWorkflowOpsBusy,
+    );
+  });
   useEffect(() => {
-    const handler = (event: Event): void => {
+    const overviewHandler = (event: Event): void => {
       const detail = (event as CustomEvent<AutomationsOverviewVisibilityDetail>)
         .detail;
       setOverviewVisible(Boolean(detail?.visible));
     };
-    window.addEventListener(AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT, handler);
-    return () =>
+    const busyHandler = (event: Event): void => {
+      const detail = (event as CustomEvent<AutomationsWorkflowOpsBusyDetail>)
+        .detail;
+      setWorkflowOpsBusy(Boolean(detail?.busy));
+    };
+    window.addEventListener(
+      AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT,
+      overviewHandler,
+    );
+    window.addEventListener(AUTOMATIONS_WORKFLOW_OPS_BUSY_EVENT, busyHandler);
+    return () => {
       window.removeEventListener(
         AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT,
-        handler,
+        overviewHandler,
       );
+      window.removeEventListener(
+        AUTOMATIONS_WORKFLOW_OPS_BUSY_EVENT,
+        busyHandler,
+      );
+    };
   }, []);
+  // Keep the right rail collapsed while a workflow is being generated.
+  // Rail-during-loading is visual noise — the user is watching the
+  // WorkflowGenerationProgress card in the main pane and can't usefully
+  // interact with the chat until generation finishes.
+  const railCollapsed = overviewVisible || workflowOpsBusy;
   return (
     <AutomationsViewContext.Provider value={controller}>
       <AppWorkspaceChrome
         testId="automations-workspace"
         hideCollapseButton
-        chatCollapsed={overviewVisible}
+        chatCollapsed={railCollapsed}
         onToggleChat={() => {
           /* no-op — rail is fully state-driven on Automations */
         }}
