@@ -2315,12 +2315,141 @@ function AutomationsDashboard({
   );
 }
 
+/**
+ * Stage messages for `WorkflowGenerationProgress`. We can't yet observe
+ * the plugin's actual stage from the client (the API is a single
+ * request/response), so we cycle through plausible labels on a fixed
+ * timer. Labels reflect what the plugin actually does:
+ *   1. extractKeywords (fast — runtime context provider + LLM keyword call)
+ *   2. searchNodes + credential filter + fetchRuntimeContext
+ *   3. generateWorkflow (LLM, slowest)
+ *   4. validateAndRepair + injectMissingCredentialBlocks
+ *   5. deployWorkflow + resolveCredentials + activate
+ */
+const WORKFLOW_GENERATION_STAGES: ReadonlyArray<{
+  label: string;
+  hint: string;
+  /** Approximate seconds at which this stage takes over. */
+  startsAt: number;
+}> = [
+  {
+    label: "Understanding your prompt",
+    hint: "Extracting keywords + matching providers",
+    startsAt: 0,
+  },
+  {
+    label: "Finding the right nodes",
+    hint: "Searching catalog + checking credentials",
+    startsAt: 3,
+  },
+  {
+    label: "Generating workflow",
+    hint: "Asking the LLM with runtime facts",
+    startsAt: 6,
+  },
+  {
+    label: "Validating + repairing",
+    hint: "Clamping versions + auto-fixing references",
+    startsAt: 18,
+  },
+  {
+    label: "Deploying to n8n",
+    hint: "Minting credentials + activating",
+    startsAt: 24,
+  },
+  {
+    label: "Almost done",
+    hint: "Wrapping up — this is taking a bit longer than usual",
+    startsAt: 35,
+  },
+];
+
+function WorkflowGenerationProgress() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+
+  const currentIndex = WORKFLOW_GENERATION_STAGES.reduce(
+    (acc, stage, idx) => (elapsed >= stage.startsAt ? idx : acc),
+    0,
+  );
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-bg/30 p-5">
+      <div className="flex items-start gap-3">
+        <div
+          className="mt-0.5 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent"
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <div className="text-sm font-semibold text-txt">
+              Building your workflow…
+            </div>
+            <div className="text-xs text-muted/80">
+              Generations usually take 10–30 seconds.
+            </div>
+          </div>
+          <ol className="space-y-1.5">
+            {WORKFLOW_GENERATION_STAGES.map((stage, idx) => {
+              const isDone = idx < currentIndex;
+              const isActive = idx === currentIndex;
+              return (
+                <li
+                  key={stage.label}
+                  className={`flex items-start gap-2 text-xs transition-opacity ${isDone || isActive ? "opacity-100" : "opacity-40"}`}
+                >
+                  <span
+                    className={`mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${isDone ? "border-ok bg-ok/15 text-ok" : isActive ? "border-accent bg-accent/15" : "border-border/40"}`}
+                    aria-hidden
+                  >
+                    {isDone ? (
+                      <svg
+                        viewBox="0 0 12 12"
+                        className="h-2.5 w-2.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M2.5 6.5l2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : isActive ? (
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`font-medium ${isActive ? "text-txt" : "text-muted"}`}>
+                      {stage.label}
+                    </span>
+                    {(isDone || isActive) && (
+                      <span className="ml-1.5 text-muted/70">
+                        — {stage.hint}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AutomationDraftPane({
   automation,
+  isGenerating,
   onSeedPrompt,
   onDeleteDraft,
 }: {
   automation: AutomationItem;
+  isGenerating: boolean;
   onSeedPrompt: (prompt: string) => void;
   onDeleteDraft: (item: AutomationItem) => Promise<void>;
 }) {
@@ -2348,6 +2477,7 @@ function AutomationDraftPane({
             size="sm"
             className="h-8 gap-1.5 px-3 text-sm"
             onClick={() => openSidebarDraftChat(DESCRIBE_WORKFLOW_PROMPT)}
+            disabled={isGenerating}
           >
             {DESCRIBE_WORKFLOW_PROMPT}
           </Button>
@@ -2356,38 +2486,43 @@ function AutomationDraftPane({
             size="sm"
             className="h-8 px-3 text-sm text-danger hover:bg-danger/10 hover:text-danger"
             onClick={() => void onDeleteDraft(automation)}
+            disabled={isGenerating}
           >
             Delete draft
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-1.5 sm:grid-cols-2">
-        {AUTOMATION_DRAFT_EXAMPLES.map((example) => {
-          const Icon = example.icon;
-          return (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => openSidebarDraftChat(example.prompt)}
-              className="group flex items-start gap-2 rounded-[var(--radius-sm)] border border-border/25 bg-bg/30 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-accent/5"
-            >
-              <Icon
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent/80"
-                aria-hidden
-              />
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="text-xs-tight font-semibold text-txt">
-                  {example.label}
+      {isGenerating ? (
+        <WorkflowGenerationProgress />
+      ) : (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {AUTOMATION_DRAFT_EXAMPLES.map((example) => {
+            const Icon = example.icon;
+            return (
+              <button
+                key={example.label}
+                type="button"
+                onClick={() => openSidebarDraftChat(example.prompt)}
+                className="group flex items-start gap-2 rounded-[var(--radius-sm)] border border-border/25 bg-bg/30 px-3 py-2 text-left transition-colors hover:border-accent/40 hover:bg-accent/5"
+              >
+                <Icon
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent/80"
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-xs-tight font-semibold text-txt">
+                    {example.label}
+                  </div>
+                  <div className="line-clamp-2 text-[11px] leading-snug text-muted/70">
+                    {example.prompt}
+                  </div>
                 </div>
-                <div className="line-clamp-2 text-[11px] leading-snug text-muted/70">
-                  {example.prompt}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -4481,6 +4616,7 @@ function AutomationsLayout() {
         ) : resolvedSelectedItem?.type === "automation_draft" ? (
           <AutomationDraftPane
             automation={resolvedSelectedItem}
+            isGenerating={workflowOpsBusy}
             onSeedPrompt={(prompt) => prefillPageChat(prompt, { select: true })}
             onDeleteDraft={handleDeleteDraft}
           />
