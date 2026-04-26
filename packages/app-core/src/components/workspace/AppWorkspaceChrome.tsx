@@ -346,12 +346,12 @@ export function AppWorkspaceChrome({
               >
                 <PanelRightOpen className="h-4 w-4" />
               </button>
-            ) : (
+            ) : !hideCollapseButton ? (
               <AppWorkspaceChatDockToggleButton
                 collapsed
                 testId={`${testId}-chat-expand`}
               />
-            )}
+            ) : null}
           </aside>
         ) : (
           <>

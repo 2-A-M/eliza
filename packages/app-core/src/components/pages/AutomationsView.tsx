@@ -4569,26 +4569,37 @@ export function AutomationsView() {
 
 export function AutomationsDesktopShell() {
   const controller = useAutomationsViewController();
-  // Session 22 UI cleanup: collapse the right-rail chat dock when no
-  // workflow / draft is selected. The Automations Overview page already
-  // has a centered hero compose ("Describe a task or workflow…") that's
-  // the canonical create surface; the bottom-right dock + hero showed
-  // two inputs at once and confused users. When a workflow or draft IS
-  // selected, restore uncontrolled behavior so the rail (and its
-  // PageScopedChatPane) is available for editing/refining.
+  // Session 22 UI cleanup: kill the small bottom-right corner toggle
+  // button on every Automations state. It's tiny (24px square), badly
+  // placed, and visually noisy. Two states:
+  //
+  //   - No workflow / draft selected (Overview empty state) →
+  //     force-collapse the rail so only the centered hero compose is
+  //     visible. Hero is the canonical create surface.
+  //
+  //   - Workflow or draft selected → leave the rail uncontrolled so
+  //     it opens by default for editing/refining (the planner-routed
+  //     conversational flow). User can collapse via the in-chat-pane
+  //     close affordance, not the corner button.
+  //
+  // hideCollapseButton: true ALWAYS on Automations — neither state
+  // shows the corner toggle. Rail visibility is fully state-driven by
+  // whether a workflow / draft is selected, no manual toggle needed.
   const hasScopedItem = controller.resolvedSelectedItem != null;
   return (
     <AutomationsViewContext.Provider value={controller}>
       <AppWorkspaceChrome
         testId="automations-workspace"
+        hideCollapseButton
+        chatCollapsed={!hasScopedItem}
+        onToggleChat={() => {
+          /* no-op — rail is fully state-driven on Automations */
+        }}
         chat={
           <AutomationsSidebarChat
             activeItem={controller.resolvedSelectedItem}
           />
         }
-        {...(hasScopedItem
-          ? {}
-          : { chatCollapsed: true, onToggleChat: () => {}, hideCollapseButton: true })}
         main={
           <div className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
             <AutomationsLayout />
