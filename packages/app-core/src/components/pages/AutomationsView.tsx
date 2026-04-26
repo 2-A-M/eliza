@@ -4571,27 +4571,46 @@ export function AutomationsDesktopShell() {
   const controller = useAutomationsViewController();
   // Session 22 UI cleanup: kill the small bottom-right corner toggle
   // button on every Automations state. It's tiny (24px square), badly
-  // placed, and visually noisy. Two states:
+  // placed, and visually noisy. Rail visibility is fully state-driven:
   //
-  //   - No workflow / draft selected (Overview empty state) →
-  //     force-collapse the rail so only the centered hero compose is
+  //   - Overview dashboard visible → force-collapse the rail so only
+  //     the centered hero compose ('Describe a task or workflow…') is
   //     visible. Hero is the canonical create surface.
   //
-  //   - Workflow or draft selected → leave the rail uncontrolled so
-  //     it opens by default for editing/refining (the planner-routed
-  //     conversational flow). User can collapse via the in-chat-pane
-  //     close affordance, not the corner button.
+  //   - Workflow / draft / detail-pane visible → rail is open for
+  //     editing/refining via the planner-routed conversational flow.
   //
-  // hideCollapseButton: true ALWAYS on Automations — neither state
-  // shows the corner toggle. Rail visibility is fully state-driven by
-  // whether a workflow / draft is selected, no manual toggle needed.
-  const hasScopedItem = controller.resolvedSelectedItem != null;
+  // We track this via the same window event the AutomationsLayout
+  // already dispatches (AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT) — the
+  // layout's local `showDashboard` state is the source of truth.
+  // Reading `controller.resolvedSelectedItem` instead would be wrong
+  // because Heartbeat (or any pre-selected task) keeps it non-null
+  // even when the dashboard view IS active.
+  const [overviewVisible, setOverviewVisible] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const flag = (window as AutomationsOverviewWindow)
+      .__miladyAutomationsOverviewVisible;
+    return flag === undefined ? true : Boolean(flag);
+  });
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<AutomationsOverviewVisibilityDetail>)
+        .detail;
+      setOverviewVisible(Boolean(detail?.visible));
+    };
+    window.addEventListener(AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT, handler);
+    return () =>
+      window.removeEventListener(
+        AUTOMATIONS_OVERVIEW_VISIBILITY_EVENT,
+        handler,
+      );
+  }, []);
   return (
     <AutomationsViewContext.Provider value={controller}>
       <AppWorkspaceChrome
         testId="automations-workspace"
         hideCollapseButton
-        chatCollapsed={!hasScopedItem}
+        chatCollapsed={overviewVisible}
         onToggleChat={() => {
           /* no-op — rail is fully state-driven on Automations */
         }}
