@@ -229,6 +229,79 @@ describe("startMiladyN8nRuntimeContextProvider", () => {
     expect(ctx.facts).toEqual([]);
   });
 
+  it("preferredProviders empty when no connector token is configured", async () => {
+    const handle = startMiladyN8nRuntimeContextProvider(runtime, {
+      getConfig: () => makeConfig(),
+    });
+    const ctx = await handle.service.getRuntimeContext({
+      userId: USER_ID,
+      relevantNodes: [],
+      relevantCredTypes: [],
+    });
+    expect(ctx.preferredProviders).toEqual([]);
+  });
+
+  it("preferredProviders lists each provider whose token / accessToken is set", async () => {
+    const config = makeConfig({
+      connectors: {
+        discord: { token: "d-tok" },
+        telegram: { botToken: "t-tok" },
+        gmail: { accessToken: "g-tok", email: "u@example.com" },
+        slack: { accessToken: "s-tok" },
+      },
+    });
+    const handle = startMiladyN8nRuntimeContextProvider(runtime, {
+      getConfig: () => config,
+    });
+    const ctx = await handle.service.getRuntimeContext({
+      userId: USER_ID,
+      relevantNodes: [],
+      relevantCredTypes: [],
+    });
+    expect(ctx.preferredProviders).toEqual([
+      "discord",
+      "telegram",
+      "gmail",
+      "slack",
+    ]);
+  });
+
+  it("preferredProviders excludes gmail when only clientId/secret are present (OAuth incomplete)", async () => {
+    const config = makeConfig({
+      connectors: {
+        gmail: { clientId: "cid", clientSecret: "csecret" },
+      },
+    });
+    const handle = startMiladyN8nRuntimeContextProvider(runtime, {
+      getConfig: () => config,
+    });
+    const ctx = await handle.service.getRuntimeContext({
+      userId: USER_ID,
+      relevantNodes: [],
+      relevantCredTypes: [],
+    });
+    expect(ctx.preferredProviders).toEqual([]);
+  });
+
+  it("preferredProviders is independent of relevantNodes/relevantCredTypes (early-context path)", async () => {
+    // The plugin calls getRuntimeContext with empty relevantNodes BEFORE
+    // searchNodes runs, just to grab preferredProviders. Verify it works.
+    const config = makeConfig({
+      connectors: { discord: { token: "tok" } },
+    });
+    const handle = startMiladyN8nRuntimeContextProvider(runtime, {
+      getConfig: () => config,
+    });
+    const ctxEarly = await handle.service.getRuntimeContext({
+      userId: USER_ID,
+      relevantNodes: [],
+      relevantCredTypes: [],
+    });
+    expect(ctxEarly.preferredProviders).toEqual(["discord"]);
+    expect(ctxEarly.supportedCredentials).toEqual([]);
+    expect(ctxEarly.facts).toEqual([]);
+  });
+
   it("caches Discord REST responses across consecutive calls", async () => {
     const config = makeConfig({
       connectors: { discord: { token: "tok" } },

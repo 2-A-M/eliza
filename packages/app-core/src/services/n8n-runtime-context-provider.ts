@@ -43,6 +43,16 @@ interface RuntimeContextSupportedCredential {
 export interface RuntimeContext {
   supportedCredentials: RuntimeContextSupportedCredential[];
   facts: string[];
+  /**
+   * Lowercase provider tags the host can actually satisfy right now (e.g.
+   * `["gmail", "discord"]`). Derived purely from connector config — no node
+   * or credential filtering — so it can be returned even when called with
+   * empty `relevantNodes`/`relevantCredTypes` (the plugin's early-context
+   * path uses this to bias keyword extraction before searchNodes runs).
+   * The plugin appends this to KEYWORD_EXTRACTION_SYSTEM_PROMPT so the LLM
+   * emits `"gmail"` instead of `"imap"` when the user says "my emails".
+   */
+  preferredProviders: string[];
 }
 
 /** Mirrors the plugin's `NodeDefinition.credentials` shape (subset). */
@@ -310,6 +320,26 @@ export function startMiladyN8nRuntimeContextProvider(
     return out;
   };
 
+  /**
+   * Derive provider tags from connector config. Independent of relevantNodes
+   * / relevantCredTypes so it can be returned for the plugin's early-context
+   * call (before searchNodes runs). Lowercased to match the plugin's
+   * keyword-extraction directive style ("gmail", "discord", not "Gmail").
+   */
+  const derivePreferredProviders = (
+    connectors: ConnectorConfigLike["connectors"],
+  ): string[] => {
+    const out: string[] = [];
+    if (connectors?.discord?.token?.trim()) out.push("discord");
+    if (connectors?.telegram?.botToken?.trim()) out.push("telegram");
+    // Gmail / Slack require an access token (OAuth completed) — having only
+    // clientId/clientSecret means the user registered the app but never
+    // signed in, so we cannot mint a credential yet.
+    if (connectors?.gmail?.accessToken?.trim()) out.push("gmail");
+    if (connectors?.slack?.accessToken?.trim()) out.push("slack");
+    return out;
+  };
+
   const getRuntimeContext = async (
     input: RuntimeContextProviderInput,
   ): Promise<RuntimeContext> => {
@@ -346,6 +376,8 @@ export function startMiladyN8nRuntimeContextProvider(
       }
     }
 
+    const preferredProviders = derivePreferredProviders(connectors);
+
     runtime.logger.debug?.(
       {
         src: "n8n-runtime-context-provider",
@@ -354,11 +386,12 @@ export function startMiladyN8nRuntimeContextProvider(
         factCount: facts.length,
         wantsDiscord,
         wantsGmail,
+        preferredProviders,
         relevantCredTypes: input.relevantCredTypes,
       },
       "n8n-runtime-context-provider: returning context",
     );
-    return { supportedCredentials, facts };
+    return { supportedCredentials, facts, preferredProviders };
   };
 
   const service = {
