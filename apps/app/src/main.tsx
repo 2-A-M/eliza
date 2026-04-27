@@ -49,6 +49,7 @@ import {
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
+import { dispatchFocusConnector } from "@elizaos/app-core";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
@@ -406,6 +407,18 @@ function handleDeepLink(url: string): void {
 
   if (parsed.protocol !== `${APP_URL_SCHEME}:`) return;
   const path = getDeepLinkPath(parsed);
+
+  // milady://settings/connectors/<provider> — open Settings and ask SettingsView
+  // to scroll the matching connector panel into view.
+  const connectorMatch = path.match(/^settings\/connectors\/([a-z0-9-]+)$/i);
+  if (connectorMatch) {
+    window.location.hash = "#settings";
+    const provider = connectorMatch[1].toLowerCase();
+    // Defer one tick so the hash change settles and SettingsView mounts before
+    // we dispatch — otherwise the listener isn't subscribed yet.
+    queueMicrotask(() => dispatchFocusConnector(provider));
+    return;
+  }
 
   switch (path) {
     case "chat":

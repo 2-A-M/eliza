@@ -75,7 +75,11 @@ import {
   type WorkbenchTask,
 } from "../../api/client";
 import { useWorkflowGenerationState } from "../../hooks/useWorkflowGenerationState";
-import { useApp } from "../../state";
+import {
+  dispatchFocusConnector,
+  providerFromCredType,
+  useApp,
+} from "../../state";
 import { confirmDesktopAction } from "../../utils";
 import { formatDateTime, formatDurationMs } from "../../utils/format";
 import { WidgetHost } from "../../widgets";
@@ -4640,6 +4644,9 @@ function AutomationsLayout() {
                       variant="outline"
                       onClick={() => {
                         setTab("settings");
+                        dispatchFocusConnector(
+                          providerFromCredType(cred.credType),
+                        );
                         setMissingCredentials(null);
                       }}
                     >
