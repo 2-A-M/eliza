@@ -98,6 +98,7 @@ import {
   setSelfControlPluginConfig,
 } from "./website-blocker/engine.js";
 import { WebsiteBlockerService } from "./website-blocker/service.js";
+import { isDarwin } from "./platform/host.js";
 
 const GOOGLE_CONNECTOR_PLUGIN_PACKAGE = "@elizaos/plugin-google";
 const GOOGLE_CONNECTOR_PLUGIN_NAME = "google";
@@ -283,6 +284,13 @@ function scheduleTaskEnsureAfterRuntimeInit(args: {
     });
 }
 
+// Darwin-only action surface: the native activity tracker, the only
+// SCREEN_TIME data source the planner can reason about end-to-end, is
+// macOS-only — hide the action on other hosts so the planner never picks it.
+const platformGatedActions = [
+  ...(isDarwin() ? [screenTimeAction] : []),
+];
+
 const rawAppLifeOpsPlugin: Plugin = {
   name: "@elizaos/app-lifeops",
   description:
@@ -307,7 +315,7 @@ const rawAppLifeOpsPlugin: Plugin = {
     bookTravelAction,
     profileAction,
     relationshipAction,
-    screenTimeAction,
+    ...platformGatedActions,
     voiceCallAction,
     remoteDesktopAction,
     scheduleAction,

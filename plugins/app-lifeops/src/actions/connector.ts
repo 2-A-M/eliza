@@ -13,6 +13,7 @@ import type { LifeOpsGoogleCapability } from "../contracts/index.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { INTERNAL_URL } from "../lifeops/access.js";
 import { getConnectorRegistry } from "../lifeops/connectors/index.js";
+import { darwinUnavailableActionResult, isDarwin } from "../platform/host.js";
 
 const ACTION_NAME = "CONNECTOR";
 
@@ -134,10 +135,12 @@ function listKnownConnectorKinds(runtime: IAgentRuntime): string[] {
   const fromRegistry = registry
     ? registry.list().map((contribution) => contribution.kind)
     : [];
-  // Verbose dispatcher kinds are always valid (they cover diagnostic verbs
-  // like `health` and `browser_bridge` that aren't connector contributions
-  // in the W1-F sense — those still flow through this action).
-  return [...new Set([...VERBOSE_DISPATCHER_KINDS, ...fromRegistry])];
+  // iMessage is wired through the native macOS bridge; surfacing it on
+  // non-darwin would just produce confusing planner suggestions.
+  const verboseKinds = isDarwin()
+    ? VERBOSE_DISPATCHER_KINDS
+    : VERBOSE_DISPATCHER_KINDS.filter((kind) => kind !== "imessage");
+  return [...new Set([...verboseKinds, ...fromRegistry])];
 }
 
 function isValidConnectorKind(
@@ -1070,6 +1073,14 @@ async function dispatchIMessage(
   subaction: ConnectorSubaction,
   params: ConnectorActionParams,
 ): Promise<ActionResult> {
+  if (!isDarwin()) {
+    return darwinUnavailableActionResult({
+      actionName: ACTION_NAME,
+      connector: "imessage",
+      subaction,
+      feature: "iMessage",
+    });
+  }
   switch (subaction) {
     case "status":
     case "list": {

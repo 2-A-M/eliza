@@ -2,7 +2,7 @@
 
 import * as clack from "@clack/prompts";
 import { Command } from "commander";
-import { create, info, upgrade, version } from "./commands/index.js";
+import { create, deploy, info, upgrade, version } from "./commands/index.js";
 import { getCliVersion } from "./package-info.js";
 
 const program = new Command();
@@ -73,6 +73,17 @@ program
   .option("--dry-run", "Preview the upgrade without writing files")
   .option("--skip-upstream", "Skip updating the upstream eliza checkout")
   .action(upgrade);
+
+program
+  .command("deploy")
+  .description(
+    "Deploy the current elizaOS project to Eliza Cloud (experimental — keel only)",
+  )
+  .option("--app-id <id>", "Eliza Cloud app UUID to deploy")
+  .option("--domain <host>", "Custom domain to attach after deploy")
+  .option("--dry-run", "Print the planned deploy sequence without running it")
+  .option("--verbose", "Echo backend requests to stderr")
+  .action(deploy);
 
 program.action(defaultAction);
 

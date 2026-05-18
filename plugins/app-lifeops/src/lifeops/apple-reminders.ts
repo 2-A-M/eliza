@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isDarwin } from "../platform/host.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -233,7 +234,7 @@ export async function createNativeAppleReminderLikeItem(args: {
         | "native_error";
     }
 > {
-  if (process.platform !== "darwin") {
+  if (!isDarwin()) {
     return {
       ok: false,
       provider: "apple_reminders",
@@ -318,7 +319,7 @@ export async function updateNativeAppleReminderLikeItem(args: {
         | "native_error";
     }
 > {
-  if (process.platform !== "darwin") {
+  if (!isDarwin()) {
     return {
       ok: false,
       provider: "apple_reminders",
@@ -409,7 +410,7 @@ export async function deleteNativeAppleReminderLikeItem(
         | "native_error";
     }
 > {
-  if (process.platform !== "darwin") {
+  if (!isDarwin()) {
     return {
       ok: false,
       provider: "apple_reminders",
