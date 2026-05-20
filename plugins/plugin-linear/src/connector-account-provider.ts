@@ -23,6 +23,7 @@ import {
   type ConnectorOAuthStartResult,
   type IAgentRuntime,
   logger,
+  readRequestedConnectorRole,
 } from "@elizaos/core";
 import { readLinearAccounts } from "./accounts";
 
@@ -272,11 +273,10 @@ export function createLinearConnectorAccountProvider(
 
       const flowMetadata =
         (request.flow.metadata as Record<string, unknown> | undefined) ?? {};
-      const requestedRoleRaw = flowMetadata.requestedRole;
-      const role: "OWNER" | "AGENT" | "TEAM" =
-        requestedRoleRaw === "AGENT" || requestedRoleRaw === "TEAM"
-          ? requestedRoleRaw
-          : "OWNER";
+      const role = readRequestedConnectorRole(
+        flowMetadata,
+        "plugin:linear:connector",
+      );
 
       const accountPatch: ConnectorAccountPatch & { provider: string } = {
         provider: LINEAR_PROVIDER_NAME,
