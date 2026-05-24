@@ -163,6 +163,59 @@ async function resolveConnectorSource(
   return null;
 }
 
+function getDiscordSenderId(message: Memory): string | null {
+  const content = message.content as Record<string, unknown> | undefined;
+  if (!content) return null;
+
+  const metadata = content.metadata as Record<string, unknown> | undefined;
+  if (metadata && typeof metadata === "object") {
+    const raw = metadata.rawMessage as Record<string, unknown> | undefined;
+    const author = raw?.author as Record<string, unknown> | undefined;
+    if (author && typeof author.id === "string" && author.id.length > 0) {
+      return author.id;
+    }
+    const authorId = metadata.authorId;
+    if (typeof authorId === "string" && authorId.length > 0) {
+      return authorId;
+    }
+    const discord = metadata.discord as Record<string, unknown> | undefined;
+    if (discord && typeof discord === "object") {
+      const userId = discord.userId ?? discord.authorId ?? discord.user_id;
+      if (typeof userId === "string" && userId.length > 0) {
+        return userId;
+      }
+    }
+  }
+
+  if (typeof message.entityId === "string" && message.entityId.length > 0) {
+    return message.entityId;
+  }
+  return null;
+}
+
+function checkDiscordOwnerBypass(
+  runtime: IAgentRuntime,
+  message: Memory,
+  connector: string | null,
+): RoleCheckResult | null {
+  if (connector !== "discord") return null;
+
+  const ownerId =
+    runtime.getSetting?.("DISCORD_OWNER_ID") ??
+    process.env.DISCORD_OWNER_ID ??
+    null;
+  if (typeof ownerId !== "string" || ownerId.trim().length === 0) {
+    return null;
+  }
+
+  const senderId = getDiscordSenderId(message);
+  if (!senderId || senderId !== ownerId.trim()) {
+    return null;
+  }
+
+  return { role: "OWNER", isAdmin: true, isOwner: true };
+}
+
 async function resolveSenderRole(
   runtime: IAgentRuntime,
   message: Memory,
@@ -261,6 +314,16 @@ export async function requireTaskAgentAccess(
       connector,
       requiredRole,
       actualRole: "GUEST",
+    };
+  }
+
+  const ownerBypass = checkDiscordOwnerBypass(runtime, message, connector);
+  if (ownerBypass) {
+    return {
+      allowed: true,
+      connector,
+      requiredRole,
+      actualRole: "OWNER",
     };
   }
 
