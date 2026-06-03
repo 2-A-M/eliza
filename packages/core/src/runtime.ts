@@ -448,6 +448,35 @@ function isTextStreamResult(
 	);
 }
 
+/**
+ * Drain a model's separate reasoning/thinking stream (if any) into the
+ * streaming context's reasoning callback. Best-effort: errors are swallowed so
+ * reasoning streaming never breaks the visible text path. Meant to run
+ * concurrently with the `textStream` drain — the channels are interleaved at
+ * the provider source, so consuming them sequentially could deadlock a
+ * single-source fan-out.
+ */
+async function drainReasoningStream(
+	reasoningStream: AsyncIterable<string> | undefined,
+	onReasoningChunk: StreamChunkCallback | undefined,
+	messageId: string | undefined,
+	abortSignal: AbortSignal | undefined,
+): Promise<void> {
+	if (!reasoningStream || !onReasoningChunk) {
+		return;
+	}
+	try {
+		for await (const chunk of reasoningStream) {
+			if (abortSignal?.aborted) {
+				break;
+			}
+			await onReasoningChunk(chunk, messageId, undefined);
+		}
+	} catch {
+		// Reasoning streaming is best-effort; never break the text path.
+	}
+}
+
 function getSearchCategoryKey(category: string): string {
 	return category.trim().toLowerCase();
 }
@@ -4752,10 +4781,17 @@ export class AgentRuntime implements IAgentRuntime {
 			(paramsChunk || ctxChunk) &&
 			isTextStreamResult(rawResponse)
 		) {
+			const reasoningDrain = drainReasoningStream(
+				rawResponse.reasoningStream,
+				streamingCtx?.onStreamReasoningChunk,
+				msgId,
+				abortSignal,
+			);
 			for await (const chunk of rawResponse.textStream) {
 				if (abortSignal?.aborted) break;
 				await deliverModelStreamChunk(chunk);
 			}
+			await reasoningDrain;
 			structuredExtractor?.flush();
 
 			const trajStreamEnd = getTrajectoryContext();
