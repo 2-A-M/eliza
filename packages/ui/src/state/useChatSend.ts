@@ -808,6 +808,7 @@ export function useChatSend(deps: UseChatSendDeps) {
         abortServerTurn,
       };
       let streamedAssistantText = "";
+      let streamedReasoning = "";
 
       try {
         const data = await client.sendConversationMessageStream(
@@ -831,6 +832,19 @@ export function useChatSend(deps: UseChatSendDeps) {
           controller.signal,
           imagesToSend,
           turn.metadata,
+          (reasoningChunk, accumulatedReasoning) => {
+            const nextReasoning =
+              typeof accumulatedReasoning === "string"
+                ? accumulatedReasoning
+                : mergeStreamingText(streamedReasoning, reasoningChunk);
+            if (nextReasoning === streamedReasoning) return;
+            streamedReasoning = nextReasoning;
+            applyStreamingTextModification(setConversationMessages, {
+              messageId: assistantMsgId,
+              mode: "replace-thinking",
+              fullText: nextReasoning,
+            });
+          },
         );
 
         if (!data.text.trim()) {
@@ -1220,6 +1234,7 @@ export function useChatSend(deps: UseChatSendDeps) {
           abortServerTurn,
         };
         let streamedAssistantText = "";
+        let streamedReasoning = "";
 
         try {
           const data = await client.sendConversationMessageStream(
@@ -1243,6 +1258,19 @@ export function useChatSend(deps: UseChatSendDeps) {
             controller.signal,
             undefined,
             buildChatViewMetadata(tab),
+            (reasoningChunk, accumulatedReasoning) => {
+              const nextReasoning =
+                typeof accumulatedReasoning === "string"
+                  ? accumulatedReasoning
+                  : mergeStreamingText(streamedReasoning, reasoningChunk);
+              if (nextReasoning === streamedReasoning) return;
+              streamedReasoning = nextReasoning;
+              applyStreamingTextModification(setConversationMessages, {
+                messageId: assistantMsgId,
+                mode: "replace-thinking",
+                fullText: nextReasoning,
+              });
+            },
           );
 
           if (!data.text.trim()) {

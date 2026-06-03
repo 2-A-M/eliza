@@ -79,6 +79,7 @@ type StreamChatEvent = {
 
 type StreamChatState = {
   fullText: string;
+  reasoningFullText: string;
   doneText: string | null;
   doneAgentName: string | null;
   doneNoResponseReason: "ignored" | null;
@@ -182,15 +183,40 @@ function applyStreamChatDoneEvent(
   return true;
 }
 
+function applyStreamChatReasoningEvent(
+  parsed: StreamChatEvent,
+  state: StreamChatState,
+  onReasoning:
+    | ((chunk: string, accumulatedReasoning?: string) => void)
+    | undefined,
+): boolean {
+  if (!onReasoning) return false;
+  const chunk = parsed.text ?? "";
+  const nextFullText =
+    typeof parsed.fullText === "string"
+      ? parsed.fullText
+      : chunk
+        ? state.reasoningFullText + chunk
+        : state.reasoningFullText;
+  if (nextFullText === state.reasoningFullText) return false;
+  state.reasoningFullText = nextFullText;
+  onReasoning(chunk, state.reasoningFullText);
+  return false;
+}
+
 function applyStreamChatDataLine(
   line: string,
   state: StreamChatState,
   onToken: (token: string, accumulatedText?: string) => void,
+  onReasoning?: (chunk: string, accumulatedReasoning?: string) => void,
 ): boolean {
   const parsed = parseStreamChatDataLine(line);
   if (!parsed) return false;
   if (parsed.type === "token") {
     return applyStreamChatTokenEvent(parsed, state, onToken);
+  }
+  if (parsed.type === "reasoning") {
+    return applyStreamChatReasoningEvent(parsed, state, onReasoning);
   }
   if (parsed.type === "done") {
     return applyStreamChatDoneEvent(parsed, state);
@@ -1102,6 +1128,7 @@ export class ElizaClient {
     signal?: AbortSignal,
     images?: ImageAttachment[],
     metadata?: Record<string, unknown>,
+    onReasoning?: (chunk: string, accumulatedReasoning?: string) => void,
   ): Promise<{
     text: string;
     agentName: string;
@@ -1144,6 +1171,7 @@ export class ElizaClient {
     let buffer = "";
     const streamState: StreamChatState = {
       fullText: "",
+      reasoningFullText: "",
       doneText: null,
       doneAgentName: null,
       doneNoResponseReason: null,
@@ -1185,7 +1213,7 @@ export class ElizaClient {
         buffer = buffer.slice(eventBreak.index + eventBreak.length);
         for (const line of rawEvent.split(/\r?\n/)) {
           if (!line.startsWith("data:")) continue;
-          if (applyStreamChatDataLine(line, streamState, onToken)) {
+          if (applyStreamChatDataLine(line, streamState, onToken, onReasoning)) {
             buffer = "";
             void reader.cancel("elizaos-sse-terminal-done").catch(() => {});
             break;
@@ -1200,7 +1228,7 @@ export class ElizaClient {
     if (!streamState.receivedDone && buffer.trim()) {
       for (const line of buffer.split(/\r?\n/)) {
         if (line.startsWith("data:")) {
-          applyStreamChatDataLine(line, streamState, onToken);
+          applyStreamChatDataLine(line, streamState, onToken, onReasoning);
         }
       }
     }

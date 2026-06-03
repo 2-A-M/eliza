@@ -54,6 +54,12 @@ export type StreamingTextModification =
     }
   | {
       messageId: string;
+      mode: "replace-thinking";
+      /** Cumulative model reasoning from the SSE `reasoning` stream. */
+      fullText: string;
+    }
+  | {
+      messageId: string;
       mode: "complete";
       /** Final reconciled assistant text from the server. */
       fullText: string;
@@ -92,6 +98,10 @@ function computeNextMessage(
     case "replace": {
       if (mod.fullText === message.text) return null;
       return { ...message, text: mod.fullText };
+    }
+    case "replace-thinking": {
+      if (mod.fullText === (message.thinking ?? "")) return null;
+      return { ...message, thinking: mod.fullText };
     }
     case "complete": {
       const sameText = message.text === mod.fullText;

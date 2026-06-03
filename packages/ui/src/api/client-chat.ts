@@ -413,6 +413,7 @@ declare module "./client-base" {
       signal?: AbortSignal,
       images?: ImageAttachment[],
       metadata?: Record<string, unknown>,
+      onReasoning?: (chunk: string, accumulatedReasoning?: string) => void,
     ): Promise<{
       text: string;
       agentName: string;
@@ -1052,6 +1053,7 @@ ElizaClient.prototype.sendConversationMessageStream = async function (
   signal?,
   images?,
   metadata?,
+  onReasoning?,
 ) {
   return this.streamChatEndpoint(
     `/api/conversations/${encodeURIComponent(id)}/messages/stream`,
@@ -1061,6 +1063,7 @@ ElizaClient.prototype.sendConversationMessageStream = async function (
     signal,
     images,
     metadata,
+    onReasoning,
   );
 };
 

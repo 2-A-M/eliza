@@ -64,6 +64,33 @@ describe("applyStreamingTextModification", () => {
     expect(harness.current[0].text).toBe("Hello world");
   });
 
+  it("replace-thinking sets reasoning without touching visible text", () => {
+    const initial = [assistantMsg("a1", "Hello")];
+    const harness = makeSetter(initial);
+
+    applyStreamingTextModification(harness.setter, {
+      messageId: "a1",
+      mode: "replace-thinking",
+      fullText: "Let me think about this...",
+    });
+
+    expect(harness.current[0].thinking).toBe("Let me think about this...");
+    expect(harness.current[0].text).toBe("Hello");
+  });
+
+  it("replace-thinking is a no-op when reasoning is unchanged", () => {
+    const initial = [assistantMsg("a1", "Hello", { thinking: "same" })];
+    const harness = makeSetter(initial);
+
+    applyStreamingTextModification(harness.setter, {
+      messageId: "a1",
+      mode: "replace-thinking",
+      fullText: "same",
+    });
+
+    expect(harness.current).toBe(initial);
+  });
+
   it("complete is idempotent on identical text + failure state", () => {
     const initial = [assistantMsg("a1", "Done")];
     const harness = makeSetter(initial);
