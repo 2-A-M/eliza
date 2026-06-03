@@ -665,6 +665,13 @@ export interface TextStreamResult {
 	textStream: AsyncIterable<string>;
 
 	/**
+	 * Optional async iterable yielding reasoning/thinking deltas separately from
+	 * `textStream`. Set by providers that surface extended-thinking output (e.g.
+	 * plugin-anthropic via the AI SDK `fullStream`); absent otherwise.
+	 */
+	reasoningStream?: AsyncIterable<string>;
+
+	/**
 	 * Promise that resolves to the complete text after streaming finishes.
 	 * Useful when you need the full response after streaming.
 	 */

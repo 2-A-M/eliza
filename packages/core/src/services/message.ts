@@ -1394,6 +1394,8 @@ type ResolvedMessageOptions = {
 	continueAfterActions: boolean;
 	keepExistingResponses: boolean;
 	onStreamChunk?: StreamChunkCallback;
+	/** Reasoning/thinking chunk callback; see MessageProcessingOptions. */
+	onStreamReasoningChunk?: StreamChunkCallback;
 	shouldRespondModel: ShouldRespondModelType;
 	/**
 	 * Per-turn abort signal threaded into the streaming context so
@@ -8986,6 +8988,9 @@ export class DefaultMessageService implements IMessageService {
 					shouldRespondModel: resolvedShouldRespondModel,
 					...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
 					...(options?.effort ? { effort: options.effort } : {}),
+					...(options?.onStreamReasoningChunk
+						? { onStreamReasoningChunk: options.onStreamReasoningChunk }
+						: {}),
 				};
 
 				const instrumentedCallback = wrapSingleTurnVisibleCallback(
@@ -9085,6 +9090,12 @@ export class DefaultMessageService implements IMessageService {
 						opts.onStreamChunk
 							? {
 									onStreamChunk: opts.onStreamChunk,
+									...(opts.onStreamReasoningChunk
+										? {
+												onStreamReasoningChunk:
+													opts.onStreamReasoningChunk,
+											}
+										: {}),
 									messageId: responseId,
 									...(opts.abortSignal
 										? { abortSignal: opts.abortSignal }

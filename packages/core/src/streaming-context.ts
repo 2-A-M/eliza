@@ -25,6 +25,12 @@ import { StackContextManager } from "./utils/stack-context-manager";
 export interface StreamingContext extends StreamingEventHooks {
 	/** Called for each chunk of streamed content */
 	onStreamChunk: StreamChunkCallback;
+	/**
+	 * Called for each reasoning/thinking chunk, streamed separately from the
+	 * visible content delivered to `onStreamChunk`. Drained from
+	 * `TextStreamResult.reasoningStream` by `useModel`.
+	 */
+	onStreamReasoningChunk?: StreamChunkCallback;
 	/** Called when a useModel streaming call completes (allows reset between calls) */
 	onStreamEnd?: () => void;
 	messageId?: string;

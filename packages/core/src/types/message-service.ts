@@ -21,6 +21,11 @@ export interface MessageProcessingOptions {
 	shouldRespondModel?: ShouldRespondModelType;
 	onStreamChunk?: StreamChunkCallback;
 	/**
+	 * Optional callback for reasoning/thinking chunks, streamed separately from
+	 * the visible content chunks delivered to `onStreamChunk`.
+	 */
+	onStreamReasoningChunk?: StreamChunkCallback;
+	/**
 	 * When true, run a follow-up reasoning pass after actions complete so the
 	 * agent can decide whether to share results, run another action, or stop.
 	 * Defaults to enabled unless runtime.getSetting("CONTINUE_AFTER_ACTIONS")
