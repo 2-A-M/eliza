@@ -327,6 +327,56 @@ export function normalizeCustomActionName(value: string): string {
     .toUpperCase();
 }
 
+export interface ParsedGoalCommand {
+  goal: string;
+  acceptanceCriteria: string[];
+}
+
+/**
+ * Parse the argument string of a `/goal` command into a goal and acceptance
+ * criteria. Everything before a `criteria:` marker is the goal; everything
+ * after is split into criteria on newlines, leading `- ` bullets, or commas.
+ * Returns null when no goal text is present.
+ *
+ * Examples:
+ *   "build X criteria: a, b"        → { goal: "build X", criteria: ["a","b"] }
+ *   "build X\n- does A\n- does B"   → { goal: "build X", criteria: ["does A","does B"] }
+ *   "just build X"                  → { goal: "just build X", criteria: [] }
+ */
+export function parseGoalCommand(argsRaw: string): ParsedGoalCommand | null {
+  const text = argsRaw.trim();
+  if (!text) return null;
+
+  const criteriaMatch = text.match(/\bcriteria\s*:/i);
+  let goalPart = text;
+  let criteriaPart = "";
+  if (criteriaMatch && criteriaMatch.index !== undefined) {
+    goalPart = text.slice(0, criteriaMatch.index).trim();
+    criteriaPart = text
+      .slice(criteriaMatch.index + criteriaMatch[0].length)
+      .trim();
+  } else {
+    // No explicit marker: treat `- ` bullet lines after the first line as
+    // criteria, the first line as the goal.
+    const lines = text.split("\n");
+    const bulletStart = lines.findIndex((line) => /^\s*-\s+/.test(line));
+    if (bulletStart > 0) {
+      goalPart = lines.slice(0, bulletStart).join(" ").trim();
+      criteriaPart = lines.slice(bulletStart).join("\n");
+    }
+  }
+
+  const goal = goalPart.trim();
+  if (!goal) return null;
+
+  const acceptanceCriteria = criteriaPart
+    .split(/\n|,/)
+    .map((entry) => entry.replace(/^\s*-\s*/, "").trim())
+    .filter((entry) => entry.length > 0);
+
+  return { goal, acceptanceCriteria };
+}
+
 export function parseCustomActionParams(
   action: CustomActionDef,
   argsRaw: string,

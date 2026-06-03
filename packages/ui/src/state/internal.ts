@@ -19,6 +19,7 @@ export {
   parseAgentStatusFromMainMenuResetPayload,
   parseConversationMessageEvent,
   parseCustomActionParams,
+  parseGoalCommand,
   parseProactiveMessageEvent,
   parseSlashCommandInput,
   parseStreamEventEnvelopeEvent,

@@ -1216,6 +1216,11 @@ export interface CodingAgentCreateTaskInput {
   priority?: CodingAgentTaskThread["priority"];
   acceptanceCriteria?: string[];
   providerPolicy?: CodingAgentTaskProviderPolicy;
+  /**
+   * Free-form task metadata forwarded to the orchestrator. `autoVerify: true`
+   * opts the task into the LLM goal-verification loop (see the `/goal` command).
+   */
+  metadata?: Record<string, unknown>;
 }
 
 /** Structured payload for forking a task via `POST /api/orchestrator/tasks/:id/fork`. */

@@ -30,6 +30,7 @@ import {
   mergeStreamingText,
   normalizeCustomActionName,
   parseCustomActionParams,
+  parseGoalCommand,
   parseSlashCommandInput,
   shouldApplyFinalStreamText,
 } from "./internal";
@@ -478,6 +479,44 @@ export function useChatSend(deps: UseChatSendDeps) {
             "Use $query for a quick, non-persistent context answer.",
           ];
           appendLocalCommandTurn(rawText, lines.join("\n\n"));
+          return { handled: true };
+        }
+
+        if (slash.name === "goal") {
+          const parsed = parseGoalCommand(slash.argsRaw);
+          if (!parsed) {
+            appendLocalCommandTurn(
+              rawText,
+              "Usage: /goal <what to build> [criteria: a, b, c]. Example: /goal write a hello-world script in /tmp criteria: file exists, prints Hello",
+            );
+            return { handled: true };
+          }
+          try {
+            const task = await client.createOrchestratorTask({
+              title: parsed.goal.slice(0, 80),
+              goal: parsed.goal,
+              originalRequest: rawText,
+              acceptanceCriteria: parsed.acceptanceCriteria,
+              metadata: { autoVerify: parsed.acceptanceCriteria.length > 0 },
+            });
+            await client.addOrchestratorAgent(task.id, {});
+            const criteriaLine = parsed.acceptanceCriteria.length
+              ? `\nAcceptance criteria:\n${parsed.acceptanceCriteria
+                  .map((c) => `- ${c}`)
+                  .join("\n")}`
+              : "\n(no acceptance criteria — verification disabled)";
+            appendLocalCommandTurn(
+              rawText,
+              `Started goal task "${parsed.goal}".${criteriaLine}`,
+            );
+          } catch (err) {
+            appendLocalCommandTurn(
+              rawText,
+              `Failed to start goal: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          }
           return { handled: true };
         }
 
