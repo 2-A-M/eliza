@@ -75,7 +75,12 @@ import type { FirstRunRuntimeTarget } from "../first-run/runtime-target";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
 import type { AgentProfile } from "./agent-profile-types";
-import type { UiShellMode, UiTheme, UiThemeMode } from "./ui-preferences";
+import type {
+  ChatEffort,
+  UiShellMode,
+  UiTheme,
+  UiThemeMode,
+} from "./ui-preferences";
 
 export type { UiShellMode } from "./ui-preferences";
 
@@ -355,6 +360,7 @@ export interface AppState {
   chatLastUsage: ChatTurnUsage | null;
   chatAvatarVisible: boolean;
   chatAgentVoiceMuted: boolean;
+  chatEffort: ChatEffort;
   chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;

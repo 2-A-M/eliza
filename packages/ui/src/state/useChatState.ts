@@ -16,14 +16,17 @@ import type {
 import type { AutonomyEventStore, AutonomyRunHealthMap } from "./autonomy";
 import {
   loadChatAvatarVisible,
+  loadChatEffort,
   loadChatVoiceMuted,
   loadCompanionMessageCutoffTs,
   saveActiveConversationId,
   saveChatAvatarVisible,
+  saveChatEffort,
   saveChatVoiceMuted,
   saveCompanionMessageCutoffTs,
 } from "./persistence";
 import type { ChatTurnUsage } from "./types";
+import type { ChatEffort } from "./ui-preferences";
 
 // ── State shape ────────────────────────────────────────────────────────
 
@@ -34,6 +37,7 @@ export interface ChatState {
   chatLastUsage: ChatTurnUsage | null;
   chatAvatarVisible: boolean;
   chatAgentVoiceMuted: boolean;
+  chatEffort: ChatEffort;
   chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;
@@ -55,6 +59,7 @@ function createInitialChatState(): ChatState {
     chatLastUsage: null,
     chatAvatarVisible: loadChatAvatarVisible(),
     chatAgentVoiceMuted: loadChatVoiceMuted(),
+    chatEffort: loadChatEffort(),
     chatAvatarSpeaking: false,
     conversations: [],
     activeConversationId: null,
@@ -79,6 +84,7 @@ type ChatAction =
   | { type: "SET_LAST_USAGE"; value: ChatTurnUsage | null }
   | { type: "SET_AVATAR_VISIBLE"; value: boolean }
   | { type: "SET_VOICE_MUTED"; value: boolean }
+  | { type: "SET_CHAT_EFFORT"; value: ChatEffort }
   | { type: "SET_AVATAR_SPEAKING"; value: boolean }
   | { type: "SET_CONVERSATIONS"; value: Conversation[] }
   | { type: "SET_ACTIVE_CONVERSATION_ID"; value: string | null }
@@ -111,6 +117,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, chatAvatarVisible: action.value };
     case "SET_VOICE_MUTED":
       return { ...state, chatAgentVoiceMuted: action.value };
+    case "SET_CHAT_EFFORT":
+      return { ...state, chatEffort: action.value };
     case "SET_AVATAR_SPEAKING":
       return { ...state, chatAvatarSpeaking: action.value };
     case "SET_CONVERSATIONS":
@@ -183,6 +191,7 @@ export interface ChatStateHook {
   setChatLastUsage: (v: ChatTurnUsage | null) => void;
   setChatAvatarVisible: (v: boolean) => void;
   setChatAgentVoiceMuted: (v: boolean) => void;
+  setChatEffort: (v: ChatEffort) => void;
   setChatAvatarSpeaking: (v: boolean) => void;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
   setActiveConversationId: (v: string | null) => void;
@@ -202,6 +211,7 @@ export interface ChatStateHook {
   // Refs (for synchronous access in callbacks)
   activeConversationIdRef: React.RefObject<string | null>;
   chatInputRef: React.RefObject<string>;
+  chatEffortRef: React.RefObject<ChatEffort>;
   chatPendingImagesRef: React.RefObject<ImageAttachment[]>;
   conversationMessagesRef: React.RefObject<ConversationMessage[]>;
   conversationsRef: React.RefObject<Conversation[]>;
@@ -231,6 +241,7 @@ export function useChatState(): ChatStateHook {
   // ── Refs for synchronous access ──
   const activeConversationIdRef = useRef<string | null>(null);
   const chatInputRef = useRef("");
+  const chatEffortRef = useRef<ChatEffort>(loadChatEffort());
   const chatPendingImagesRef = useRef<ImageAttachment[]>([]);
   const conversationMessagesRef = useRef<ConversationMessage[]>([]);
   const conversationsRef = useRef<Conversation[]>([]);
@@ -282,6 +293,12 @@ export function useChatState(): ChatStateHook {
   const setChatAgentVoiceMuted = useCallback((v: boolean) => {
     saveChatVoiceMuted(v);
     dispatch({ type: "SET_VOICE_MUTED", value: v });
+  }, []);
+
+  const setChatEffort = useCallback((v: ChatEffort) => {
+    chatEffortRef.current = v;
+    saveChatEffort(v);
+    dispatch({ type: "SET_CHAT_EFFORT", value: v });
   }, []);
 
   const setChatAvatarSpeaking = useCallback(
@@ -397,6 +414,7 @@ export function useChatState(): ChatStateHook {
     setChatLastUsage,
     setChatAvatarVisible,
     setChatAgentVoiceMuted,
+    setChatEffort,
     setChatAvatarSpeaking,
     setConversations,
     setActiveConversationId,
@@ -412,6 +430,7 @@ export function useChatState(): ChatStateHook {
     resetDraftState,
     activeConversationIdRef,
     chatInputRef,
+    chatEffortRef,
     chatPendingImagesRef,
     conversationMessagesRef,
     conversationsRef,

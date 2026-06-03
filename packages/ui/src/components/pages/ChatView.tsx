@@ -44,6 +44,7 @@ import {
   isLikelyAccountRequiredError,
   mergeConnectorSendAsMetadata,
 } from "../chat/connector-send-as";
+import { EffortSelector } from "../chat/EffortSelector";
 import { MessageContent } from "../chat/MessageContent";
 import { ChatVoiceStatusBar } from "../composites/chat/ChatVoiceStatusBar";
 import { ContinuousChatToggle } from "../composites/chat/ContinuousChatToggle";
@@ -152,6 +153,7 @@ export function ChatView({
     analysisMode,
     shareIngestNotice: rawShareIngestNotice,
     chatAgentVoiceMuted: agentVoiceMuted,
+    chatEffort,
     selectedVrmIndex,
     uiLanguage,
     sendChatText,
@@ -716,6 +718,13 @@ export function ChatView({
       before={
         <>
           <CodingAgentControlChip />
+          <div className="flex justify-start px-1 pb-0.5">
+            <EffortSelector
+              value={chatEffort}
+              onChange={(value) => setState("chatEffort", value)}
+              disabled={isComposerLocked}
+            />
+          </div>
           {continuousChatToggleVisible ? (
             <div className="flex justify-end px-1 pb-0.5">
               <ContinuousChatToggle
@@ -778,6 +787,13 @@ export function ChatView({
       before={
         <>
           <CodingAgentControlChip />
+          <div className="flex justify-start px-1 pb-0.5">
+            <EffortSelector
+              value={chatEffort}
+              onChange={(value) => setState("chatEffort", value)}
+              disabled={isComposerLocked}
+            />
+          </div>
           {continuousChatToggleVisible ? (
             <div className="flex justify-end px-1 pb-0.5">
               <ContinuousChatToggle

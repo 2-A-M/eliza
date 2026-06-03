@@ -10,6 +10,7 @@ import type {
   ImageAttachment,
 } from "../api";
 import type { LoadConversationMessagesResult } from "./internal";
+import type { ChatEffort } from "./ui-preferences";
 import { type UseChatSendDeps, useChatSend } from "./useChatSend";
 
 const mocks = vi.hoisted(() => ({
@@ -110,6 +111,7 @@ function makeDeps(
       current: overrides.activeConversationId ?? null,
     } as MutableRefObject<string | null>,
     chatInputRef: { current: "" } as MutableRefObject<string>,
+    chatEffortRef: { current: "none" } as MutableRefObject<ChatEffort>,
     chatPendingImagesRef,
     conversationsRef,
     conversationMessagesRef,

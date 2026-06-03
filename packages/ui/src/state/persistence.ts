@@ -14,7 +14,12 @@ import type {
   CompanionVrmPowerMode,
   SetupStep,
 } from "./types";
-import type { UiShellMode, UiTheme, UiThemeMode } from "./ui-preferences";
+import type {
+  ChatEffort,
+  UiShellMode,
+  UiTheme,
+  UiThemeMode,
+} from "./ui-preferences";
 import { normalizeAvatarIndex } from "./vrm";
 
 /* ── Shared localStorage helper ──────────────────────────────────────── */
@@ -803,6 +808,29 @@ export function saveChatAvatarVisible(value: boolean): void {
 export function saveChatVoiceMuted(value: boolean): void {
   tryLocalStorage(() => {
     localStorage.setItem(CHAT_VOICE_MUTED_KEY, String(value));
+  }, undefined);
+}
+
+const CHAT_EFFORT_KEY = "eliza:chat:effort";
+
+function normalizeChatEffort(value: unknown): ChatEffort {
+  return value === "low" || value === "medium" || value === "high"
+    ? value
+    : "none";
+}
+
+export { normalizeChatEffort };
+
+export function loadChatEffort(): ChatEffort {
+  return tryLocalStorage(
+    () => normalizeChatEffort(localStorage.getItem(CHAT_EFFORT_KEY)),
+    "none",
+  );
+}
+
+export function saveChatEffort(value: ChatEffort): void {
+  tryLocalStorage(() => {
+    localStorage.setItem(CHAT_EFFORT_KEY, normalizeChatEffort(value));
   }, undefined);
 }
 

@@ -25,6 +25,7 @@ import {
   loadActiveConversationId,
 } from "./internal";
 import type { FirstRunMode, SetupStep } from "./types";
+import type { ChatEffort } from "./ui-preferences";
 
 import { useChatLifecycle } from "./useChatLifecycle";
 import { useChatSend } from "./useChatSend";
@@ -179,6 +180,7 @@ export interface UseChatCallbacksDeps {
   // Refs from useChatState
   activeConversationIdRef: MutableRefObject<string | null>;
   chatInputRef: MutableRefObject<string>;
+  chatEffortRef: MutableRefObject<ChatEffort>;
   chatPendingImagesRef: MutableRefObject<ImageAttachment[]>;
   conversationsRef: MutableRefObject<Conversation[]>;
   conversationMessagesRef: MutableRefObject<ConversationMessage[]>;
@@ -309,6 +311,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     resetConversationDraftState,
     activeConversationIdRef,
     chatInputRef,
+    chatEffortRef,
     chatPendingImagesRef,
     conversationsRef,
     conversationMessagesRef,
@@ -653,6 +656,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     setActionNotice,
     activeConversationIdRef,
     chatInputRef,
+    chatEffortRef,
     chatPendingImagesRef,
     conversationsRef,
     conversationMessagesRef,

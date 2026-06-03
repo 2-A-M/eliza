@@ -33,6 +33,7 @@ import {
   parseSlashCommandInput,
   shouldApplyFinalStreamText,
 } from "./internal";
+import type { ChatEffort } from "./ui-preferences";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -298,6 +299,8 @@ export interface UseChatSendDeps {
   // Refs
   activeConversationIdRef: MutableRefObject<string | null>;
   chatInputRef: MutableRefObject<string>;
+  /** Latest reasoning-effort selection, read at send time. */
+  chatEffortRef: MutableRefObject<ChatEffort>;
   chatPendingImagesRef: MutableRefObject<ImageAttachment[]>;
   conversationsRef: MutableRefObject<Conversation[]>;
   conversationMessagesRef: MutableRefObject<ConversationMessage[]>;
@@ -339,6 +342,7 @@ export function useChatSend(deps: UseChatSendDeps) {
     setActionNotice,
     activeConversationIdRef,
     chatInputRef,
+    chatEffortRef,
     chatPendingImagesRef,
     conversationsRef,
     conversationMessagesRef,
@@ -1012,13 +1016,22 @@ export function useChatSend(deps: UseChatSendDeps) {
         return;
       }
 
+      // Carry the current reasoning-effort selection on the turn. Omitted at
+      // "none" so default turns are byte-identical to the historical request
+      // (no surprise thinking spend).
+      const effort = chatEffortRef.current;
+      const metadataWithEffort =
+        effort && effort !== "none"
+          ? { ...(options?.metadata ?? {}), effort }
+          : options?.metadata;
+
       await new Promise<void>((resolve, reject) => {
         chatSendQueueRef.current.push({
           rawInput,
           channelType: options?.channelType ?? "DM",
           conversationId: options?.conversationId,
           images: options?.images,
-          metadata: buildChatViewMetadata(tab, options?.metadata),
+          metadata: buildChatViewMetadata(tab, metadataWithEffort),
           resolve,
           reject,
         });
@@ -1026,7 +1039,7 @@ export function useChatSend(deps: UseChatSendDeps) {
         void flushQueuedChatSends();
       });
     },
-    [flushQueuedChatSends, setChatSending, tab],
+    [chatEffortRef, flushQueuedChatSends, setChatSending, tab],
   );
 
   const handleChatSend = useCallback(
