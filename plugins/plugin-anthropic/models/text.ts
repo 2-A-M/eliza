@@ -41,6 +41,7 @@ import {
 } from "../utils/config";
 import { emitModelUsageEvent } from "../utils/events";
 import { executeWithRetry, formatModelError } from "../utils/retry";
+import { resolveThinkingProviderOptions } from "./thinking";
 
 type ProviderOptionValue =
   | string
@@ -50,7 +51,7 @@ type ProviderOptionValue =
   | ProviderOptionValue[]
   | { [key: string]: ProviderOptionValue | undefined };
 
-interface ProviderOptions {
+export interface ProviderOptions {
   [key: string]: ProviderOptionValue | undefined;
   readonly agentName?: string;
   readonly anthropic?: AnthropicProviderOptions;
@@ -787,16 +788,11 @@ function resolveTextParams(
       }
     : {};
 
-  const providerOptions: ProviderOptions =
-    cotBudget > 0
-      ? {
-          ...baseProviderOptions,
-          anthropic: {
-            ...(baseProviderOptions.anthropic ?? {}),
-            thinking: { type: "enabled", budgetTokens: cotBudget },
-          },
-        }
-      : baseProviderOptions;
+  const providerOptions = resolveThinkingProviderOptions(
+    baseProviderOptions,
+    modelName,
+    cotBudget,
+  );
 
   return {
     prompt,
