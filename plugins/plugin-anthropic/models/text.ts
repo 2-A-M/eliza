@@ -41,6 +41,7 @@ import {
 } from "../utils/config";
 import { emitModelUsageEvent } from "../utils/events";
 import { executeWithRetry, formatModelError } from "../utils/retry";
+import { splitReasoningFromFullStream } from "./reasoning-stream";
 import { resolveThinkingProviderOptions } from "./thinking";
 
 type ProviderOptionValue =
@@ -978,21 +979,46 @@ async function generateTextWithModel(
         return normalizeAnthropicUsage(usage as AnthropicUsageWithCache, providerMetadata);
       });
       const ignoreUsageError = (): undefined => undefined;
-      async function* textStreamWithUsage(): AsyncIterable<string> {
-        let completed = false;
-        try {
-          for await (const chunk of streamResult.textStream) {
-            yield chunk;
-          }
-          completed = true;
-        } finally {
-          if (completed) {
-            await usagePromise.catch(ignoreUsageError);
+      // Finalize usage accounting once the visible text stream is fully drained.
+      const withUsageFinalization = (
+        source: AsyncIterable<string>,
+      ): AsyncIterable<string> => {
+        async function* gen(): AsyncIterable<string> {
+          let completed = false;
+          try {
+            for await (const chunk of source) {
+              yield chunk;
+            }
+            completed = true;
+          } finally {
+            if (completed) {
+              await usagePromise.catch(ignoreUsageError);
+            }
           }
         }
+        return gen();
+      };
+
+      // When extended thinking is enabled, consume the AI SDK `fullStream` and
+      // split reasoning deltas from visible text so the runtime can surface
+      // model reasoning separately. Otherwise keep the plain `textStream` path
+      // byte-identical to the default (no-thinking) behaviour.
+      const thinkingEnabled = Boolean(
+        resolved.providerOptions.anthropic?.thinking,
+      );
+      let reasoningStream: AsyncIterable<string> | undefined;
+      let textStream: AsyncIterable<string>;
+      if (thinkingEnabled) {
+        const split = splitReasoningFromFullStream(streamResult.fullStream);
+        textStream = withUsageFinalization(split.textStream);
+        reasoningStream = split.reasoningStream;
+      } else {
+        textStream = withUsageFinalization(streamResult.textStream);
       }
+
       return {
-        textStream: textStreamWithUsage(),
+        textStream,
+        ...(reasoningStream ? { reasoningStream } : {}),
         text: Promise.resolve(streamResult.text).then(async (text) => {
           await usagePromise.catch(ignoreUsageError);
           return text;
