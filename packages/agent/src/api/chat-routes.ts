@@ -670,6 +670,12 @@ export interface ChatGenerationResult {
 
 export interface ChatGenerateOptions {
   onChunk?: (chunk: string) => void;
+  /**
+   * Called for each model reasoning/thinking delta (high-effort turns only),
+   * with the delta and the full reasoning accumulated so far. Streamed
+   * separately from the visible content delivered to `onChunk`.
+   */
+  onReasoning?: (chunk: string, fullReasoning: string) => void;
   onSnapshot?: (text: string) => void;
   isAborted?: () => boolean;
   abortSignal?: AbortSignal;
@@ -2208,6 +2214,7 @@ export async function generateChatResponse(
                 walletAugmentedMessage,
               );
             const chatEffort = readChatEffort(generationMessage);
+            let streamedReasoning = "";
             result = await runtime.messageService?.handleMessage(
               runtime,
               generationMessage,
@@ -2241,6 +2248,14 @@ export async function generateChatResponse(
                       if (!chunk) return;
                       if (!claimStreamSource("onStreamChunk")) return;
                       appendIncomingText(chunk);
+                    }
+                  : undefined,
+                onStreamReasoningChunk: opts?.onReasoning
+                  ? async (chunk: string) => {
+                      if (generationTimedOut || opts?.isAborted?.()) return;
+                      if (!chunk) return;
+                      streamedReasoning += chunk;
+                      opts.onReasoning?.(chunk, streamedReasoning);
                     }
                   : undefined,
               },

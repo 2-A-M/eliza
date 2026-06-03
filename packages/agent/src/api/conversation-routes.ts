@@ -1627,6 +1627,20 @@ export async function handleConversationRoutes(
             streamedText += chunk;
             writeChatTokenSse(res, chunk, streamedText);
           },
+          onReasoning: (chunk, fullReasoning) => {
+            if (!chunk) return;
+            if (
+              disconnectTracker.isAborted() ||
+              disconnectTracker.checkConnectionClosed()
+            ) {
+              return;
+            }
+            writeSseJson(res, {
+              type: "reasoning",
+              text: chunk,
+              fullText: fullReasoning,
+            });
+          },
           onSnapshot: (text) => {
             if (!text) return;
             if (
