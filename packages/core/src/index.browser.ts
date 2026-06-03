@@ -106,6 +106,7 @@ export * from "./services/agentEvent";
 // expose the same symbols so Vite/esbuild can statically resolve plugins that
 // list them in `services` (see @elizaos/agent runtime).
 export { AgentEventService } from "./services/agentEvent";
+export * from "./services/effort";
 export * from "./services/message";
 export * from "./services/trajectories";
 export * from "./settings";

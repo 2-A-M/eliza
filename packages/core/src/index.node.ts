@@ -249,6 +249,7 @@ export * from "./sensitive-requests";
 export * from "./services";
 export * from "./services/agentEvent";
 export * from "./services/approval";
+export * from "./services/effort";
 export * from "./services/evaluator";
 export * from "./services/evaluator-priorities";
 export * from "./services/hook";

@@ -62,6 +62,7 @@ export * from "./security";
 export * from "./services";
 export * from "./services/agentEvent";
 export * from "./services/approval";
+export * from "./services/effort";
 export * from "./services/message";
 export * from "./services/pairing";
 export * from "./services/pairing-integration";

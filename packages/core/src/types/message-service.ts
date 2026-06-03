@@ -83,6 +83,14 @@ export type ShouldRespondModelType =
 export type MessageProcessingMode = "simple" | "actions" | "none" | "blocked";
 
 /**
+ * Reasoning "effort" level selected per chat turn from the UI composer and
+ * carried on the inbound message as `metadata.effort`. Higher levels opt the
+ * turn into a thinking-enabled deliberate-reply pass; see `resolveEffortKnobs`
+ * (`../services/effort`) for the concrete tier/budget mapping.
+ */
+export type ChatEffort = "none" | "low" | "medium" | "high";
+
+/**
  * Core interface for message handling service.
  * This service is responsible for processing incoming messages and generating responses.
  *
