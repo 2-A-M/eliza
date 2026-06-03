@@ -145,6 +145,7 @@ import type { RunEventPayload } from "../types/events";
 import { EventType } from "../types/events";
 import type { Memory } from "../types/memory";
 import type {
+	ChatEffort,
 	ContextRoutedResponseDecision,
 	IMessageService,
 	MessageProcessingOptions,
@@ -1400,6 +1401,12 @@ type ResolvedMessageOptions = {
 	 * in-flight inference. Sourced from `MessageProcessingOptions.abortSignal`.
 	 */
 	abortSignal?: AbortSignal;
+	/**
+	 * Per-turn reasoning effort, sourced from `MessageProcessingOptions.effort`
+	 * (originally `message.metadata.effort`). Consumed by the deliberate-reply
+	 * pass; absent/`none`/`low` leave the turn byte-identical to today.
+	 */
+	effort?: ChatEffort;
 };
 
 function normalizeShouldRespondModelType(
@@ -8978,6 +8985,7 @@ export class DefaultMessageService implements IMessageService {
 						),
 					shouldRespondModel: resolvedShouldRespondModel,
 					...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
+					...(options?.effort ? { effort: options.effort } : {}),
 				};
 
 				const instrumentedCallback = wrapSingleTurnVisibleCallback(

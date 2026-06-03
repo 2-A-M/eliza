@@ -34,6 +34,12 @@ export interface MessageProcessingOptions {
 	 * @default resolved from runtime.getSetting("BASIC_CAPABILITIES_KEEP_RESP") if not set
 	 */
 	keepExistingResponses?: boolean;
+	/**
+	 * Per-turn reasoning effort selected in the chat composer, validated at the
+	 * API boundary from `message.metadata.effort`. Higher levels opt the turn
+	 * into a thinking-enabled deliberate-reply pass; see `resolveEffortKnobs`.
+	 */
+	effort?: ChatEffort;
 }
 
 /**
