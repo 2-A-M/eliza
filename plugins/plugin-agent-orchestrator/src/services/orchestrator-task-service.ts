@@ -28,6 +28,7 @@ import {
 import {
   buildGoalFollowUp,
   buildGoalPrompt,
+  type GoalEffort,
   type GoalFollowUpReason,
 } from "./goal-prompt.js";
 import {
@@ -81,6 +82,8 @@ export interface SpawnAgentForTaskOptions {
   /** Concrete first instruction; defaults to the task goal. */
   task?: string;
   approvalPreset?: ApprovalPreset;
+  /** Reasoning-effort hint folded into the goal prompt for the sub-agent. */
+  effort?: GoalEffort;
 }
 
 export interface AddMessageInput {
@@ -988,6 +991,7 @@ export class OrchestratorTaskService extends Service {
       taskRoomId: doc.task.taskRoomId ?? doc.task.roomId,
       workdir,
       repo: opts.repo,
+      effort: opts.effort,
     });
 
     const result = await acp.spawnSession({

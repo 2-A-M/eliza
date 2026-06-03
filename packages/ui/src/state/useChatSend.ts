@@ -499,7 +499,10 @@ export function useChatSend(deps: UseChatSendDeps) {
               acceptanceCriteria: parsed.acceptanceCriteria,
               metadata: { autoVerify: parsed.acceptanceCriteria.length > 0 },
             });
-            await client.addOrchestratorAgent(task.id, {});
+            const effort = chatEffortRef.current;
+            await client.addOrchestratorAgent(task.id, {
+              ...(effort && effort !== "none" ? { effort } : {}),
+            });
             const criteriaLine = parsed.acceptanceCriteria.length
               ? `\nAcceptance criteria:\n${parsed.acceptanceCriteria
                   .map((c) => `- ${c}`)
@@ -690,7 +693,7 @@ export function useChatSend(deps: UseChatSendDeps) {
 
       return { handled: false };
     },
-    [appendLocalCommandTurn],
+    [appendLocalCommandTurn, chatEffortRef],
   );
 
   const runQueuedChatSend = useCallback(

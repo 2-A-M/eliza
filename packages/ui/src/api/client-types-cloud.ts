@@ -1241,6 +1241,8 @@ export interface CodingAgentAddAgentInput {
   repo?: string;
   label?: string;
   task?: string;
+  /** Reasoning-effort hint folded into the sub-agent's goal prompt. */
+  effort?: "none" | "low" | "medium" | "high";
 }
 
 /** Structured payload for updating a task via `PATCH /api/orchestrator/tasks/:id`. */

@@ -15,6 +15,7 @@ import {
   LLM_GOAL_VERIFIER_NAME,
   verifyGoalCompletion,
 } from "../services/goal-llm-verifier.js";
+import type { GoalEffort } from "../services/goal-prompt.js";
 import type { TaskThreadDetailDto } from "../services/orchestrator-task-mapper.js";
 import { OrchestratorTaskService } from "../services/orchestrator-task-service.js";
 import type {
@@ -60,6 +61,13 @@ function asStringArray(value: unknown): string[] | undefined {
 function asPriority(value: unknown): OrchestratorTaskPriority | undefined {
   return typeof value === "string" && PRIORITIES.has(value)
     ? (value as OrchestratorTaskPriority)
+    : undefined;
+}
+
+const GOAL_EFFORTS = new Set(["none", "low", "medium", "high"]);
+function asGoalEffort(value: unknown): GoalEffort | undefined {
+  return typeof value === "string" && GOAL_EFFORTS.has(value)
+    ? (value as GoalEffort)
     : undefined;
 }
 
@@ -575,6 +583,7 @@ async function dispatchOrchestratorRoutes(
             repo: asString(body.repo),
             label: asString(body.label),
             task: asString(body.task),
+            effort: asGoalEffort(body.effort),
           });
         } catch (error) {
           sendError(

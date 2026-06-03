@@ -16,6 +16,25 @@ describe("buildGoalPrompt", () => {
     );
   });
 
+  it("emits an effort directive when effort is set above none", () => {
+    const out = buildGoalPrompt({
+      agentName: "Sakuya",
+      goal: "Fix the flaky login test",
+      effort: "high",
+    });
+    expect(out).toContain("--- Effort ---");
+    expect(out).toContain("Reason carefully and exhaustively");
+  });
+
+  it("omits the effort section at none (or when unset)", () => {
+    const out = buildGoalPrompt({
+      agentName: "Sakuya",
+      goal: "Fix the flaky login test",
+      effort: "none",
+    });
+    expect(out).not.toContain("--- Effort ---");
+  });
+
   it("wraps the task in goal, capability fence, and completion contract", () => {
     const out = buildGoalPrompt({
       agentName: "Reimu",

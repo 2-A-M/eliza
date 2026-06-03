@@ -24,12 +24,24 @@ export const DEFAULT_GOAL_CAPABILITIES: readonly string[] = [
   "communicate with the parent/swarm",
 ];
 
+/** Reasoning effort hint, mirroring the chat composer's effort control. ACP has
+ * no standard effort field, so for sub-agents it maps to a prompt directive. */
+export type GoalEffort = "none" | "low" | "medium" | "high";
+
+const EFFORT_DIRECTIVE: Record<Exclude<GoalEffort, "none">, string> = {
+  low: "Bias toward a fast, direct solution; keep reasoning brief.",
+  medium: "Think through the key edge cases before acting.",
+  high: "Reason carefully and exhaustively: enumerate edge cases, weigh alternatives, and verify each acceptance criterion before reporting completion.",
+};
+
 export interface GoalPromptInput {
   /** The distinct person-name this sub-agent is given on spawn, so it knows its
    * own identity within the swarm (the way the main agent is named). */
   agentName: string;
   /** The durable objective the worker owns until it is met or blocked. */
   goal: string;
+  /** Reasoning-effort hint; emits a directive when set above `none`. */
+  effort?: GoalEffort;
   /** The concrete first instruction. Defaults to {@link GoalPromptInput.goal}. */
   task?: string;
   acceptanceCriteria?: string[];
@@ -121,9 +133,13 @@ export function buildGoalPrompt(input: GoalPromptInput): string {
     `Use only coding-relevant capabilities: ${capabilities.join(", ")}.`,
     "--- Working Agreement ---",
     bulletList([...COMPLETION_CONTRACT]),
-    "--- Task ---",
-    task,
   );
+
+  if (input.effort && input.effort !== "none") {
+    sections.push("--- Effort ---", EFFORT_DIRECTIVE[input.effort]);
+  }
+
+  sections.push("--- Task ---", task);
 
   return sections.join("\n");
 }
