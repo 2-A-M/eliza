@@ -195,6 +195,13 @@ export interface ConversationMessage {
   /** True when the SSE stream was interrupted before receiving a "done" event. */
   interrupted?: boolean;
   /**
+   * Model reasoning for this assistant turn, accumulated from the SSE
+   * `reasoning` event (extended thinking) and/or a coding sub-agent's ACP
+   * `agent_thought_chunk` updates. Rendered in a collapsed ThinkingBlock at the
+   * top of the bubble; never part of the user-facing `text`.
+   */
+  thinking?: string;
+  /**
    * When set, this assistant turn is the server's no-provider /
    * provider-issue / insufficient-credits fallback. The renderer can
    * substitute a structured gate UI (e.g. "Connect a provider →

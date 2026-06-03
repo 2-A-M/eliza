@@ -31,6 +31,7 @@ import { UiRenderer } from "../config-ui/ui-renderer";
 import { paramsToSchema } from "../pages/plugin-list-utils";
 import { Button } from "../ui/button";
 import { findChoiceRegions } from "./message-choice-parser";
+import { ThinkingBlock } from "./ThinkingBlock";
 import { type ChoiceOption, ChoiceWidget } from "./widgets/ChoiceWidget";
 
 /** Reject prototype-pollution keys that should never be traversed or rendered. */
@@ -81,6 +82,7 @@ type Segment =
       options: ChoiceOption[];
     }
   | { kind: "permission"; payload: PermissionCardPayload }
+  | { kind: "thinking"; content: string; streaming: boolean }
   | { kind: "analysis-xml"; tag: string; content: string };
 
 // ── Detection ───────────────────────────────────────────────────────
@@ -88,8 +90,16 @@ type Segment =
 const CONFIG_RE = /\[CONFIG:([@\w][\w@./:-]*)\]/g;
 const FENCED_JSON_RE = /```(?:json)?\s*\n([\s\S]*?)```/g;
 
+// Reasoning tags are EXTRACTED into a rendered ThinkingBlock (see
+// extractThinkingRegions), not discarded. The remaining scaffolding tags stay
+// hidden from chat bubbles.
 const HIDDEN_TAG_BLOCK_RE =
-  /<(think|analysis|reasoning|tool_calls?|tools?)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi;
+  /<(analysis|tool_calls?|tools?)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi;
+
+// `<think>` / `<reasoning>` reasoning blocks. A trailing unclosed tag (no
+// matching close) means reasoning is still streaming in.
+const THINKING_TAG_BLOCK_RE =
+  /<(think|reasoning)\b[^>]*>([\s\S]*?)(?:<\/\1>|$)/gi;
 
 /**
  * Strip partial/incomplete hidden tags at the end of a streaming text chunk.
@@ -106,8 +116,12 @@ export function normalizeDisplayText(text: string): string {
   let normalized =
     text.length > MAX_DISPLAY_LEN ? text.slice(0, MAX_DISPLAY_LEN) : text;
 
-  // Hide hidden reasoning/tool blocks from chat bubbles.
+  // Hide scaffolding tool/analysis blocks from chat bubbles.
   normalized = normalized.replace(HIDDEN_TAG_BLOCK_RE, " ");
+
+  // Reasoning blocks render in a ThinkingBlock (extracted separately); remove
+  // them from the answer text so they never appear inline.
+  normalized = normalized.replace(THINKING_TAG_BLOCK_RE, " ");
 
   // During streaming, a chunk may end mid-tag (e.g. "<thi").
   // Strip any incomplete opening or closing tag at the very end so the
@@ -116,6 +130,28 @@ export function normalizeDisplayText(text: string): string {
 
   normalized = stripAssistantStageDirections(normalized);
   return normalized.trim();
+}
+
+/**
+ * Pull reasoning out of `<think>` / `<reasoning>` blocks. A block with no
+ * closing tag means reasoning is still streaming in (`streaming: true`).
+ * Returns the joined reasoning and whether any tail block is still open.
+ */
+export function extractThinking(text: string): {
+  content: string;
+  streaming: boolean;
+} {
+  THINKING_TAG_BLOCK_RE.lastIndex = 0;
+  const parts: string[] = [];
+  let streaming = false;
+  let m: RegExpExecArray | null = THINKING_TAG_BLOCK_RE.exec(text);
+  while (m !== null) {
+    parts.push(m[2]);
+    // No closing tag captured for this match → still streaming.
+    if (!new RegExp(`</${m[1]}>`, "i").test(m[0])) streaming = true;
+    m = THINKING_TAG_BLOCK_RE.exec(text);
+  }
+  return { content: parts.join("\n\n"), streaming };
 }
 
 function tryParse(s: string): unknown {
@@ -305,16 +341,38 @@ export function findPatchRegions(
 }
 
 function parseSegments(text: string, analysisMode: boolean): Segment[] {
+  // Reasoning is always surfaced as a ThinkingBlock at the top of the bubble.
+  // In analysis mode the raw `<thought>`/`<reasoning>` tags are shown verbatim
+  // by the analysis-xml path below, so we only lift thinking out here for the
+  // normal display path.
+  const thinking = analysisMode
+    ? { content: "", streaming: false }
+    : extractThinking(text);
+  const thinkingSegments: Segment[] =
+    thinking.content.trim() || thinking.streaming
+      ? [
+          {
+            kind: "thinking",
+            content: thinking.content,
+            streaming: thinking.streaming,
+          },
+        ]
+      : [];
+
   // If analysis mode is enabled, we parse the raw text to extract XML blocks,
   // otherwise we use the normalized text which strips them.
   const targetText = analysisMode ? text : normalizeDisplayText(text);
-  if (!targetText) return [{ kind: "text", text: "" }];
+  if (!targetText) {
+    return thinkingSegments.length > 0
+      ? thinkingSegments
+      : [{ kind: "text", text: "" }];
+  }
 
   const permissionRequest = analysisMode
     ? null
     : parsePermissionRequestFromText(targetText);
   if (permissionRequest) {
-    const segments: Segment[] = [];
+    const segments: Segment[] = [...thinkingSegments];
     if (permissionRequest.display.trim()) {
       segments.push({ kind: "text", text: permissionRequest.display });
     }
@@ -400,14 +458,14 @@ function parseSegments(text: string, analysisMode: boolean): Segment[] {
     }
   }
 
-  // No special content found — return plain text
+  // No special content found — return plain text (prefixed with reasoning).
   if (regions.length === 0) {
-    return [{ kind: "text", text: targetText }];
+    return [...thinkingSegments, { kind: "text", text: targetText }];
   }
 
   // Sort by start position, then interleave with text segments
   regions.sort((a, b) => a.start - b.start);
-  const segments: Segment[] = [];
+  const segments: Segment[] = [...thinkingSegments];
   let cursor = 0;
 
   for (const r of regions) {
@@ -1050,13 +1108,25 @@ export function MessageContent({
 
   // Parse segments — memoize to avoid re-parsing on every render
   const segments = useMemo(() => {
+    let parsed: Segment[];
     try {
-      return parseSegments(message.text, analysisMode);
+      parsed = parseSegments(message.text, analysisMode);
     } catch {
       // If parsing fails, just show plain text
-      return [{ kind: "text" as const, text: message.text }];
+      parsed = [{ kind: "text", text: message.text }];
     }
-  }, [message.text, analysisMode]);
+    // A separate `thinking` field (SSE reasoning / ACP thought chunks) renders
+    // at the top of the bubble. In analysis mode the raw tags are shown inline,
+    // so we skip the field there to avoid duplication.
+    const fieldThinking = analysisMode ? "" : (message.thinking ?? "").trim();
+    if (fieldThinking) {
+      return [
+        { kind: "thinking" as const, content: fieldThinking, streaming: false },
+        ...parsed,
+      ];
+    }
+    return parsed;
+  }, [message.text, message.thinking, analysisMode]);
 
   const handleChoice = useCallback(
     (value: string) => {
@@ -1211,9 +1281,11 @@ export function MessageContent({
                   ? `choice:${seg.id}`
                   : seg.kind === "permission"
                     ? `permission:${seg.payload.feature}`
-                    : seg.kind === "analysis-xml"
-                      ? `analysis:${seg.tag}`
-                      : `ui:${seg.raw.slice(0, 80)}`;
+                    : seg.kind === "thinking"
+                      ? "thinking"
+                      : seg.kind === "analysis-xml"
+                        ? `analysis:${seg.tag}`
+                        : `ui:${seg.raw.slice(0, 80)}`;
           const segmentKey = nextKey(baseKey);
 
           switch (seg.kind) {
@@ -1222,6 +1294,14 @@ export function MessageContent({
                 <div key={segmentKey} className="whitespace-pre-wrap">
                   {seg.text}
                 </div>
+              );
+            case "thinking":
+              return (
+                <ThinkingBlock
+                  key={segmentKey}
+                  content={seg.content}
+                  streaming={seg.streaming}
+                />
               );
             case "analysis-xml":
               return (
