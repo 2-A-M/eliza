@@ -22,6 +22,10 @@ import { type IAgentRuntime, Service } from "@elizaos/core";
 import { AcpService } from "./acp-service.js";
 import { assignAgentName } from "./agent-name-assignment.js";
 import {
+  LLM_GOAL_VERIFIER_NAME,
+  verifyGoalCompletion,
+} from "./goal-llm-verifier.js";
+import {
   buildGoalFollowUp,
   buildGoalPrompt,
   type GoalFollowUpReason,
@@ -439,6 +443,10 @@ export class OrchestratorTaskService extends Service {
           stoppedAt: Date.now(),
         });
         await this.advanceTaskStatus(taskId, "validating");
+        // Opt-in LLM goal verification. Fire-and-forget so a slow/failed model
+        // call can never block session-event recording; the method enforces its
+        // own opt-in flag and iteration cap.
+        void this.maybeAutoVerify(taskId, sessionId, summary ?? "");
         break;
       }
       case "error":
@@ -748,6 +756,108 @@ export class OrchestratorTaskService extends Service {
     if (input.senderKind === "user")
       await this.store.updateTask(taskId, { lastUserTurnAt: nowIso() });
     return true;
+  }
+
+  /**
+   * Opt-in LLM goal-verification loop, fired when a sub-agent reports
+   * `task_complete` for a task whose `metadata.autoVerify === true`.
+   *
+   * Reads the task's acceptance criteria and the completion evidence, asks the
+   * verifier for a verdict, forwards it to {@link validateTask}, and — on a
+   * fail with a live session — composes a corrective follow-up from the missing
+   * criteria and re-prompts the same kept-alive session. A per-task iteration
+   * counter (`metadata.goalVerifyIterations`) capped by
+   * `ELIZA_GOAL_VERIFY_MAX_ITERATIONS` (default 3) stops the loop so a stubborn
+   * task parks at `waiting_on_user` instead of looping forever.
+   *
+   * Opt-in + capped by design: it must never fire for ordinary tasks, and
+   * never block the session-event path (callers invoke it fire-and-forget).
+   */
+  private async maybeAutoVerify(
+    taskId: string,
+    sessionId: string,
+    evidence: string,
+  ): Promise<void> {
+    try {
+      const doc = await this.store.getTask(taskId);
+      if (!doc) return;
+      const { task } = doc;
+      if (task.metadata?.autoVerify !== true) return;
+      if (task.status !== "validating") return;
+      if (task.acceptanceCriteria.length === 0) return;
+
+      const maxIterations = this.goalVerifyMaxIterations();
+      const priorIterations =
+        typeof task.metadata.goalVerifyIterations === "number"
+          ? task.metadata.goalVerifyIterations
+          : 0;
+      const iteration = priorIterations + 1;
+
+      const verdict = await verifyGoalCompletion(this.runtime, {
+        goal: task.goal,
+        acceptanceCriteria: task.acceptanceCriteria,
+        completionEvidence: evidence,
+      });
+
+      await this.validateTask(taskId, {
+        passed: verdict.passed,
+        summary: verdict.summary,
+        evidence: verdict.rawResponse || verdict.summary,
+        verifier: LLM_GOAL_VERIFIER_NAME,
+      });
+
+      if (verdict.passed) return;
+
+      // Failed: stamp the iteration count, then either re-prompt the live
+      // session with the missing criteria or park the task for the user.
+      await this.store.updateTask(taskId, {
+        metadata: { ...task.metadata, goalVerifyIterations: iteration },
+      });
+
+      if (iteration >= maxIterations) {
+        await this.advanceTaskStatus(taskId, "waiting_on_user");
+        this.log("info", "auto-verify gave up after max iterations", {
+          taskId,
+          iteration,
+          maxIterations,
+        });
+        return;
+      }
+
+      // The session that emitted task_complete is marked `completed` but kept
+      // alive by `keepAliveAfterComplete`, so it can still receive a corrective
+      // follow-up. If the session record is gone entirely, park for the user.
+      const session = doc.sessions.find((s) => s.sessionId === sessionId);
+      if (!session) {
+        await this.advanceTaskStatus(taskId, "waiting_on_user");
+        return;
+      }
+
+      const corrective = [
+        "Validation did not pass. These acceptance criteria were not confirmed:",
+        ...verdict.missing.map((item) => `- ${item}`),
+        "",
+        "Address each unmet criterion, then report completion again.",
+      ].join("\n");
+      await this.sendToTaskAgent(
+        taskId,
+        sessionId,
+        corrective,
+        "validation_failed",
+      );
+    } catch (err) {
+      this.log("warn", "auto-verify failed", {
+        taskId,
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private goalVerifyMaxIterations(): number {
+    const raw = this.runtime.getSetting?.("ELIZA_GOAL_VERIFY_MAX_ITERATIONS");
+    const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : 3;
   }
 
   /**
