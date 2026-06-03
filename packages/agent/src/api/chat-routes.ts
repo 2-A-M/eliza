@@ -16,9 +16,12 @@ import type http from "node:http";
 import {
   type AgentRuntime,
   ChannelType,
+  type ChatEffort,
   type Content,
   createMessageMemory,
+  isChatEffort,
   logger,
+  type Memory,
   ModelType,
   type RouteRequestContext,
   runWithTrajectoryContext,
@@ -1798,6 +1801,23 @@ function buildChatUsage(
   };
 }
 
+/**
+ * Read the per-turn reasoning effort the chat composer attached to the inbound
+ * message. The UI may place it on the message metadata or the content metadata;
+ * validate the untrusted value before threading it into the runtime.
+ */
+function readChatEffort(message: Memory): ChatEffort | undefined {
+  const fromMessage = asRecord(message.metadata)?.effort;
+  if (isChatEffort(fromMessage)) {
+    return fromMessage;
+  }
+  const fromContent = asRecord(message.content.metadata)?.effort;
+  if (isChatEffort(fromContent)) {
+    return fromContent;
+  }
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // generateChatResponse
 // ---------------------------------------------------------------------------
@@ -2187,6 +2207,7 @@ export async function generateChatResponse(
                 runtime,
                 walletAugmentedMessage,
               );
+            const chatEffort = readChatEffort(generationMessage);
             result = await runtime.messageService?.handleMessage(
               runtime,
               generationMessage,
@@ -2209,6 +2230,7 @@ export async function generateChatResponse(
                 timeoutDuration: generationTimeoutMs,
                 abortSignal: generationAbortController.signal,
                 keepExistingResponses: true,
+                ...(chatEffort ? { effort: chatEffort } : {}),
                 onStreamChunk: opts?.onChunk
                   ? async (chunk: string) => {
                       if (generationTimedOut || opts?.isAborted?.()) {
