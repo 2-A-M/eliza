@@ -54,6 +54,10 @@ export function buildSharedEnv(
     HCLOUD_TOKEN: "test-token",
     CONTAINER_CONTROL_PLANE_URL: urls.controlPlane,
     CONTAINER_CONTROL_PLANE_TOKEN: "test-token",
+    // Stub the Cloudflare registrar (no real account/token in tests) so domain
+    // check/buy return deterministic responses + debit credits — matches what
+    // the cloud:mock launcher (cloud-api-dev.mjs) sets.
+    ELIZA_CF_REGISTRAR_DEV_STUB: "1",
     CRON_SECRET: "test-cron-secret",
     INTERNAL_SECRET: "test-internal-secret",
     // Playwright test auth bypass — secret read by cloud-shared auth helpers
